@@ -1,26 +1,27 @@
-import NavigationBar from "@/components/NavigationBar";
-import { ProdukHoverProvider } from '../context/ProdukHoverContext';
-
-import "primereact/resources/themes/lara-light-cyan/theme.css";
-import "primereact/resources/primereact.min.css";
+import React from "react";
+import Navbar from "@/components/krezoema/Navbar";
+import Footer from "@/components/krezoema/Footer";
+import { ProdukHoverProvider } from "../context/ProdukHoverContext";
 
 export default function ClientLayout({
- children
+  children,
 }: {
- children: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="h-screen w-screen">
-        <div className="w-full h-full p-0 m-0 flex flex-col">
-          <ProdukHoverProvider>
-          <div className="fixed bg-white w-full h-[55px] z-[100]">
-                <NavigationBar/>
-            </div>
-            <div className="mt-[75px] h-full w-full overflow-x-hidden overflow-y-auto">
-                {children}
-            </div>
-          </ProdukHoverProvider>
-        </div>
-    </div>
+    <ProdukHoverProvider>
+      <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-purple/10 selection:text-brand-purple">
+        {/* Boutique Sticky Header */}
+        <Navbar />
+
+        {/* Main Document Flow */}
+        <main className="flex-1 w-full flex flex-col">
+          {children}
+        </main>
+
+        {/* Boutique Footer */}
+        <Footer />
+      </div>
+    </ProdukHoverProvider>
   );
 }

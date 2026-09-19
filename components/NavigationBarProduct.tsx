@@ -37,7 +37,7 @@ export default function NavbarProduct() {
 
   useEffect(() => {
     axios
-      .get(apiEndpoints.allContent)
+      .get((apiEndpoints as any).allContent || "")
       .then((response) => {
         setContent(response.data);
         console.log(response.data);

@@ -33,10 +33,14 @@ export default function NavigationBar() {
     <div className="fixed top-0 left-0 w-full bg-white shadow-md py-3 px-6 z-50">
       <div className="flex justify-between items-center">
         {/* === LEFT: Logo + Menu === */}
-       <div className="flex items-center gap-8 ml-4 md:ml-20">
-
+        <div className="flex items-center gap-8 ml-4 md:ml-20">
           <Link href="/">
-            <Image src="/logosd.png" width={50} height={50} alt="Logo Sekolah" />
+            <Image
+              src="/logosd.png"
+              width={50}
+              height={50}
+              alt="Logo Sekolah"
+            />
           </Link>
 
           {/* DESKTOP NAV */}
@@ -107,7 +111,10 @@ export default function NavigationBar() {
         </div>
 
         {/* === MOBILE BUTTON (Hamburger) === */}
-        <button className="md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
+        <button
+          className="md:hidden"
+          onClick={() => setMobileOpen(!mobileOpen)}
+        >
           {mobileOpen ? <X size={28} /> : <Menu size={28} />}
         </button>
       </div>

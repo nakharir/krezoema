@@ -18,6 +18,12 @@ const config = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+        body: ["var(--font-jakarta)", "system-ui", "sans-serif"],
+        serif: ["var(--font-playfair)", "Georgia", "serif"],
+        display: ["var(--font-playfair)", "Georgia", "serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -52,6 +58,25 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        brand: {
+          warm: "#FAF8F5",
+          cream: "#F4EFEA",
+          charcoal: "#212124",
+          "charcoal-muted": "#55545B",
+          sand: "#EFE9DF",
+          border: "#E5DFD5",
+          // Accents inspired by KREZOEMA logo (controlled)
+          purple: "#7C3AED",
+          "purple-light": "#EDE9FE",
+          magenta: "#DB2777",
+          "magenta-light": "#FCE7F3",
+          red: "#E11D48",
+          "red-light": "#FFE4E6",
+          orange: "#EA580C",
+          "orange-light": "#FFEDD5",
+          yellow: "#CA8A04",
+          "yellow-light": "#FEF9C3",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -71,8 +96,8 @@ const config = {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        'fade-in': 'fade-in 0.3s ease-in-out',
-        'fade-out': 'fade-out 0.3s ease-in-out'
+        "fade-in": "fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+        "fade-out": "fade-out 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
       },
     },
   },
