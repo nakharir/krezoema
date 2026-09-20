@@ -15,7 +15,7 @@ export default function CategorySection() {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-16 gap-6">
           <div className="max-w-xl">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               Koleksi Material Craft
             </span>
             <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold sm:font-extrabold text-foreground tracking-tight">
@@ -28,7 +28,7 @@ export default function CategorySection() {
 
           <Link
             href="/koleksi"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground hover:text-brand-purple transition-colors self-start md:self-end"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground hover:text-brand-pink transition-colors self-start md:self-end"
           >
             <span>Lihat Semua Material</span>
             <ArrowUpRight className="w-4 h-4" />

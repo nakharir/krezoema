@@ -6,30 +6,33 @@
   :root {
     /* KREZOEMA Warm Palette */
     --background: 38 25% 97%;       /* #FAF8F5 Warm White */
-    --foreground: 240 6% 14%;       /* #212124 Charcoal */
+    --foreground: 280 8% 15%;       /* #272329 Charcoal */
     --card: 0 0% 100%;              /* #FFFFFF Pure White Surface */
-    --card-foreground: 240 6% 14%;
+    --card-foreground: 280 8% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 6% 14%;
-    --primary: 240 6% 14%;          /* #212124 Deep Charcoal */
-    --primary-foreground: 38 25% 97%;/* #FAF8F5 */
+    --popover-foreground: 280 8% 15%;
+    --primary: 340 59% 64%;          /* #D96C91 Primary Pink */
+    --primary-foreground: 0 0% 100%; /* #FFFFFF White */
     --secondary: 36 20% 93%;        /* #F3EFEA Soft Sand */
-    --secondary-foreground: 240 6% 14%;
+    --secondary-foreground: 280 8% 15%;
     --muted: 36 15% 91%;            /* #ECE6DC */
     --muted-foreground: 240 4% 45%; /* #6F6E76 Subtle Charcoal */
-    --accent: 36 22% 94%;           /* #F6F1EA */
-    --accent-foreground: 240 6% 14%;
+    --accent: 340 65% 93%;          /* #F8E4EB Soft Pink */
+    --accent-foreground: 340 42% 52%;/* #B94F76 Dark Pink */
     --destructive: 350 84% 60%;
     --destructive-foreground: 0 0% 98%;
     --border: 36 16% 87%;           /* #E5DFD5 Warm Border */
     --input: 36 16% 87%;
-    --ring: 262 83% 58%;            /* #7C3AED Controlled Purple Accent */
+    --ring: 340 59% 64%;            /* #D96C91 Primary Pink Accent */
     --radius: 0.625rem;             /* 10px */
 
-    /* KREZOEMA Logo Accent Colors */
+    /* KREZOEMA Restrained Pink Brand Palette */
     --brand-warm: #FAF8F5;
     --brand-cream: #F4EFEA;
-    --brand-charcoal: #212124;
+    --brand-charcoal: #272329;
+    --brand-pink: #D96C91;
+    --brand-pink-soft: #F8E4EB;
+    --brand-pink-dark: #B94F76;
     --brand-purple: #7C3AED;
     --brand-magenta: #DB2777;
     --brand-red: #E11D48;
@@ -92,8 +95,8 @@
 
 /* Custom Selection Color */
 ::selection {
-  background-color: #EDE9FE;
-  color: #4C1D95;
+  background-color: #F8E4EB;
+  color: #B94F76;
 }
 
 /* Slim Warm Scrollbar */

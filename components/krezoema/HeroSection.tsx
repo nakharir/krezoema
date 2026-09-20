@@ -19,7 +19,7 @@ export default function HeroSection() {
             className="lg:col-span-7 flex flex-col items-start"
           >
             {/* Simple Eyebrow Text */}
-            <p className="text-xs sm:text-[13px] font-semibold tracking-wider uppercase text-muted-foreground mb-4">
+            <p className="text-xs sm:text-[13px] font-semibold tracking-wider uppercase text-brand-pink mb-4">
               KREZOEMA · Creative Craft &amp; Handmade Accessories
             </p>
 
@@ -38,7 +38,7 @@ export default function HeroSection() {
             <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
               <Link
                 href="/koleksi"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-foreground text-background font-semibold text-sm sm:text-base hover:bg-foreground/90 active:scale-[0.98] transition-all shadow-sm"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-brand-pink text-white font-semibold text-sm sm:text-base hover:bg-brand-pink-dark active:scale-[0.98] transition-all shadow-none"
               >
                 <span>Jelajahi Koleksi</span>
                 <ArrowRight className="w-4 h-4" />
@@ -46,7 +46,7 @@ export default function HeroSection() {
 
               <Link
                 href="/cerita-kami"
-                className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 rounded-full bg-white border border-border text-foreground font-semibold text-sm sm:text-base hover:bg-secondary active:scale-[0.98] transition-all"
+                className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3.5 rounded-full bg-white border border-border text-foreground font-semibold text-sm sm:text-base hover:border-brand-pink/50 hover:bg-brand-pink-soft/30 active:scale-[0.98] transition-all"
               >
                 <span>Cerita Kami</span>
               </Link>

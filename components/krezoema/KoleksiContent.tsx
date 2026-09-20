@@ -166,7 +166,7 @@ export default function KoleksiContent() {
       <section className="bg-brand-warm border-b border-border/60 py-10 sm:py-14 lg:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA · KOLEKSI
             </span>
             <h1 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold sm:font-extrabold text-foreground tracking-tight leading-[1.15] mb-3">
@@ -200,7 +200,7 @@ export default function KoleksiContent() {
                 value={searchQuery}
                 onChange={handleSearchChange}
                 placeholder="Cari material atau perlengkapan..."
-                className="w-full pl-10 pr-9 py-2.5 rounded-full bg-brand-warm border border-border text-foreground placeholder:text-muted-foreground text-sm font-normal focus:outline-none focus:ring-2 focus:ring-foreground/20 focus:border-foreground/40 transition-all"
+                className="w-full pl-10 pr-9 py-2.5 rounded-full bg-brand-warm border border-border text-foreground placeholder:text-muted-foreground text-sm font-normal focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink transition-all"
               />
               {searchQuery && (
                 <button
@@ -229,7 +229,7 @@ export default function KoleksiContent() {
                   value={sortBy}
                   onChange={handleSortChange}
                   aria-label="Urutkan produk"
-                  className="appearance-none bg-brand-warm border border-border text-foreground text-xs sm:text-sm font-semibold rounded-full pl-3.5 pr-8 py-2.5 focus:outline-none focus:ring-2 focus:ring-foreground/20 cursor-pointer transition-all"
+                  className="appearance-none bg-brand-warm border border-border text-foreground text-xs sm:text-sm font-semibold rounded-full pl-3.5 pr-8 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink cursor-pointer transition-all"
                 >
                   <option value="terbaru">Terbaru</option>
                   <option value="nama-asc">Nama A–Z</option>
@@ -259,8 +259,8 @@ export default function KoleksiContent() {
                 onClick={() => handleSelectCategory("semua")}
                 className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   activeCategory === "semua"
-                    ? "bg-foreground text-background shadow-sm"
-                    : "bg-brand-warm text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/80"
+                    ? "bg-brand-pink text-white shadow-none"
+                    : "bg-brand-warm text-muted-foreground hover:text-foreground hover:bg-brand-pink-soft/30 hover:border-brand-pink/30 border border-border/80"
                 }`}
               >
                 Semua
@@ -278,8 +278,8 @@ export default function KoleksiContent() {
                     onClick={() => handleSelectCategory(cat.slug)}
                     className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
                       isSelected
-                        ? "bg-foreground text-background shadow-sm"
-                        : "bg-brand-warm text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/80"
+                        ? "bg-brand-pink text-white shadow-none"
+                        : "bg-brand-warm text-muted-foreground hover:text-foreground hover:bg-brand-pink-soft/30 hover:border-brand-pink/30 border border-border/80"
                     }`}
                   >
                     {cat.name}
@@ -314,7 +314,7 @@ export default function KoleksiContent() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-pink hover:text-brand-pink-dark transition-colors"
                 aria-label="Reset semua filter"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -342,7 +342,7 @@ export default function KoleksiContent() {
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-foreground text-background font-semibold text-xs sm:text-sm hover:bg-foreground/90 active:scale-95 transition-all shadow-sm"
+                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-brand-pink text-white font-semibold text-xs sm:text-sm hover:bg-brand-pink-dark active:scale-95 transition-all shadow-none"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Reset Filter</span>

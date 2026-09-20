@@ -106,7 +106,7 @@ export default function ProductDetailView({
         {/* Category Label */}
         <Link
           href={`/koleksi?kategori=${product.category}`}
-          className="text-xs uppercase tracking-wider text-muted-foreground font-semibold hover:text-brand-purple transition-colors mb-2 inline-block w-fit"
+          className="text-xs uppercase tracking-wider text-muted-foreground font-semibold hover:text-brand-pink transition-colors mb-2 inline-block w-fit"
         >
           {product.categoryLabel}
         </Link>
@@ -163,8 +163,8 @@ export default function ProductDetailView({
                           }
                           className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium transition-all ${
                             isSelected
-                              ? "bg-foreground text-background shadow-sm"
-                              : "bg-white text-foreground border border-border hover:border-foreground/30 hover:bg-brand-warm"
+                              ? "bg-brand-pink text-white font-semibold shadow-none"
+                              : "bg-white text-foreground border border-border hover:border-brand-pink/40 hover:bg-brand-pink-soft/20"
                           }`}
                         >
                           {option}
@@ -213,10 +213,10 @@ export default function ProductDetailView({
             <button
               type="button"
               onClick={handleAddToCart}
-              className={`w-full sm:w-auto min-w-[240px] h-12 px-8 rounded-full font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] ${
+              className={`w-full sm:w-auto min-w-[240px] h-12 px-8 rounded-full font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-none active:scale-[0.99] ${
                 isAdded
-                  ? "bg-foreground text-background opacity-95 ring-2 ring-foreground/20"
-                  : "bg-foreground text-background hover:bg-foreground/90"
+                  ? "bg-brand-pink-dark text-white opacity-95 ring-2 ring-brand-pink/30"
+                  : "bg-brand-pink text-white hover:bg-brand-pink-dark"
               }`}
             >
               {isAdded ? (
@@ -235,7 +235,7 @@ export default function ProductDetailView({
             {isAdded && (
               <Link
                 href="/keranjang"
-                className="h-12 px-6 rounded-full border border-border bg-white text-foreground hover:bg-secondary font-semibold text-sm flex items-center justify-center transition-all animate-in fade-in"
+                className="h-12 px-6 rounded-full border border-brand-pink/40 bg-brand-pink-soft/30 text-brand-pink-dark hover:bg-brand-pink-soft/60 font-semibold text-sm flex items-center justify-center transition-all animate-in fade-in"
               >
                 Lihat Keranjang →
               </Link>

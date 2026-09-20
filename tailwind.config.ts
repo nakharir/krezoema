@@ -61,10 +61,14 @@ const config = {
         brand: {
           warm: "#FAF8F5",
           cream: "#F4EFEA",
-          charcoal: "#212124",
+          charcoal: "#272329",
           "charcoal-muted": "#55545B",
           sand: "#EFE9DF",
           border: "#E5DFD5",
+          // KREZOEMA Pink Visual Refinement
+          pink: "#D96C91",
+          "pink-soft": "#F8E4EB",
+          "pink-dark": "#B94F76",
           // Accents inspired by KREZOEMA logo (controlled)
           purple: "#7C3AED",
           "purple-light": "#EDE9FE",

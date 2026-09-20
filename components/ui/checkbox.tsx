@@ -12,7 +12,7 @@ export const Checkbox: React.FC<CheckboxProps> = ({ id, className, ...props }) =
         type="checkbox"
         id={id}
         className={cn(
-          "w-4 h-4 text-foreground bg-background border-border rounded focus:ring-2 focus:ring-brand-purple/20 focus:ring-offset-1 transition-colors cursor-pointer accent-foreground",
+          "w-4 h-4 text-brand-pink bg-background border-border rounded focus:ring-2 focus:ring-brand-pink/20 focus:ring-offset-1 transition-colors cursor-pointer accent-brand-pink",
           className
         )}
         {...props}

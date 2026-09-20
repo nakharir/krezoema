@@ -16,7 +16,7 @@ export default function FeaturedProducts() {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 sm:mb-16 gap-6">
           <div className="max-w-xl">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               Koleksi Unggulan
             </span>
             <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold sm:font-extrabold text-foreground tracking-tight">
@@ -29,7 +29,7 @@ export default function FeaturedProducts() {
 
           <Link
             href="/koleksi"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-border text-sm font-semibold text-foreground hover:bg-secondary active:scale-[0.98] transition-all self-start md:self-end"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white border border-border text-sm font-semibold text-foreground hover:border-brand-pink/50 hover:bg-brand-pink-soft/30 hover:text-brand-pink-dark active:scale-[0.98] transition-all self-start md:self-end"
           >
             <span>Lihat Semua Katalog</span>
             <ArrowRight className="w-4 h-4" />

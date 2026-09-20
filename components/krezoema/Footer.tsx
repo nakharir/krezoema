@@ -12,7 +12,7 @@ export default function Footer() {
       <div className="border-b border-border/60 py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-left max-w-2xl">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA Philosophy — Est. 2017
             </span>
             <p className="font-sans text-xl sm:text-2xl text-foreground font-bold italic leading-snug">
@@ -36,7 +36,7 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <Link href="/" className="inline-block mb-4 focus:outline-none group">
               <div className="flex flex-col">
-                <span className="font-sans text-xl sm:text-2xl tracking-[0.12em] font-extrabold text-foreground leading-none transition-colors group-hover:text-brand-purple">
+                <span className="font-sans text-xl sm:text-2xl tracking-[0.12em] font-extrabold text-foreground leading-none transition-colors group-hover:text-brand-pink">
                   KREZOEMA
                 </span>
                 <span className="text-[9px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mt-1">
@@ -112,7 +112,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-brand-pink transition-colors"
                 >
                   Beranda
                 </Link>
@@ -120,7 +120,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/koleksi"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-brand-pink transition-colors"
                 >
                   Semua Koleksi
                 </Link>
@@ -128,7 +128,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/cerita-kami"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-brand-pink transition-colors"
                 >
                   Cerita Kami & Filosofi
                 </Link>
@@ -136,7 +136,7 @@ export default function Footer() {
               <li>
                 <Link
                   href="/hubungi-kami"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-brand-pink transition-colors"
                 >
                   Hubungi Studio
                 </Link>
@@ -144,9 +144,17 @@ export default function Footer() {
               <li>
                 <Link
                   href="/keranjang"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-muted-foreground hover:text-brand-pink transition-colors"
                 >
                   Keranjang Belanja
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/akun"
+                  className="text-muted-foreground hover:text-brand-pink transition-colors"
+                >
+                  Akun Pelanggan
                 </Link>
               </li>
             </ul>

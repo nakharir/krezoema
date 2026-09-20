@@ -27,7 +27,7 @@ export default function CollectionCTA() {
             <div>
               <Link
                 href="/koleksi"
-                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-full bg-foreground text-background font-semibold text-sm sm:text-base hover:bg-foreground/90 active:scale-[0.98] transition-all shadow-sm"
+                className="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-full bg-brand-pink text-white font-semibold text-sm sm:text-base hover:bg-brand-pink-dark active:scale-[0.98] transition-all shadow-none"
               >
                 <span>Lihat Semua Koleksi</span>
                 <ArrowRight className="w-4 h-4" />

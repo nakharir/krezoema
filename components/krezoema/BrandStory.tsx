@@ -41,7 +41,7 @@ export default function BrandStory() {
 
           {/* Narrative Column (7 cols) */}
           <div className="lg:col-span-7 flex flex-col items-start order-1 lg:order-2">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-3">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-3">
               Tentang KREZOEMA
             </span>
 
@@ -68,7 +68,7 @@ export default function BrandStory() {
 
             <Link
               href="/cerita-kami"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-foreground text-background text-sm sm:text-base font-semibold hover:bg-foreground/90 active:scale-[0.98] transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-brand-pink text-white text-sm sm:text-base font-semibold hover:bg-brand-pink-dark active:scale-[0.98] transition-all shadow-none"
             >
               <span>Kenali KREZOEMA</span>
               <ArrowRight className="w-4 h-4" />

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
+import { AuthProvider } from "@/context/AuthContext";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -63,8 +64,10 @@ export default function RootLayout({
       lang="id"
       className={`${plusJakartaSans.variable} ${playfair.variable}`}
     >
-      <body className="min-h-screen bg-background text-foreground antialiased selection:bg-brand-purple/10 selection:text-brand-purple">
-        <CartProvider>{children}</CartProvider>
+      <body className="min-h-screen bg-background text-foreground antialiased selection:bg-brand-pink-soft selection:text-brand-pink-dark">
+        <AuthProvider>
+          <CartProvider>{children}</CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );

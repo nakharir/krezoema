@@ -18,14 +18,14 @@ export const metadata: Metadata = {
 
 export default function HubungiKamiPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-purple/10 selection:text-brand-purple">
+    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-pink-soft selection:text-brand-pink-dark">
       <Navbar />
 
       <main className="flex-1 w-full overflow-x-hidden">
         {/* Header */}
         <section className="bg-brand-warm border-b border-border/60 py-12 sm:py-16 lg:py-20">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA · KONTAK
             </span>
             <h1 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold sm:font-extrabold text-foreground tracking-tight leading-[1.15] mb-4">
@@ -87,7 +87,7 @@ export default function HubungiKamiPage() {
                     href="https://instagram.com/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white border border-border text-foreground font-semibold text-sm hover:bg-secondary transition-all"
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white border border-border text-foreground font-semibold text-sm hover:border-brand-pink/50 hover:bg-brand-pink-soft/30 hover:text-brand-pink-dark transition-all"
                   >
                     <span>Kunjungi Instagram</span>
                     <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
@@ -134,7 +134,7 @@ export default function HubungiKamiPage() {
             <div className="mt-12 text-center">
               <Link
                 href="/"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-brand-pink transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Kembali ke Beranda KREZOEMA</span>

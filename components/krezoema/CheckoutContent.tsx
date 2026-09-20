@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
+import { useAuth, CustomerAddress } from "@/context/AuthContext";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,6 +12,10 @@ import {
   CheckCircle2,
   Truck,
   AlertCircle,
+  MapPin,
+  Plus,
+  Star,
+  X,
 } from "lucide-react";
 
 interface CheckoutFormData {
@@ -27,7 +33,26 @@ interface CheckoutFormData {
 type FormErrors = Partial<Record<keyof CheckoutFormData, string>>;
 
 export default function CheckoutContent() {
+  const router = useRouter();
   const { items, cartTotal, cartItemCount, isHydrated } = useCart();
+  const {
+    isLoggedIn,
+    customer,
+    addresses,
+    defaultAddress,
+    addAddress,
+    isHydrated: isAuthHydrated,
+  } = useAuth();
+
+  // Declare isConfirmed early so it can be referenced by the guard useEffect below
+  const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
+
+  // Checkout page guard: If not logged in and cart has items, redirect to login with redirect parameter
+  useEffect(() => {
+    if (isHydrated && isAuthHydrated && !isLoggedIn && items.length > 0 && !isConfirmed) {
+      router.replace("/login?redirect=/checkout");
+    }
+  }, [isHydrated, isAuthHydrated, isLoggedIn, items.length, isConfirmed, router]);
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     nama: "",
@@ -38,12 +63,86 @@ export default function CheckoutContent() {
     provinsi: "",
     kodePos: "",
     catatan: "",
-    metodePengiriman: "J&T", // Default to J&T manual option
+    metodePengiriman: "J&T",
+  });
+
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
+  const [saveAddressToAccount, setSaveAddressToAccount] = useState<boolean>(false);
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
+  const [newAddrForm, setNewAddrForm] = useState({
+    label: "Rumah",
+    nama: "",
+    whatsapp: "",
+    alamat: "",
+    kecamatan: "",
+    kotaKabupaten: "",
+    provinsi: "",
+    kodePos: "",
+    isDefault: false,
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
+
+  // Initialize form with saved address if customer is logged in
+  useEffect(() => {
+    if (!isAuthHydrated) return;
+
+    if (isLoggedIn && addresses.length > 0) {
+      const initial = defaultAddress || addresses[0];
+      setSelectedAddressId(initial.id);
+      setFormData((prev) => ({
+        ...prev,
+        nama: initial.nama,
+        whatsapp: initial.whatsapp,
+        alamat: initial.alamat,
+        kecamatan: initial.kecamatan,
+        kota: initial.kotaKabupaten,
+        provinsi: initial.provinsi,
+        kodePos: initial.kodePos,
+      }));
+    } else if (isLoggedIn && customer) {
+      // Logged in but no addresses yet
+      setFormData((prev) => ({
+        ...prev,
+        nama: prev.nama || customer.nama,
+        whatsapp: prev.whatsapp || customer.whatsapp,
+      }));
+    }
+  }, [isLoggedIn, isAuthHydrated, addresses, defaultAddress, customer]);
+
+  // Sync formData when selecting an address
+  const handleSelectSavedAddress = (addrId: string) => {
+    setSelectedAddressId(addrId);
+    if (addrId === "manual") {
+      setFormData((prev) => ({
+        ...prev,
+        nama: customer?.nama || "",
+        whatsapp: customer?.whatsapp || "",
+        alamat: "",
+        kecamatan: "",
+        kota: "",
+        provinsi: "",
+        kodePos: "",
+      }));
+      return;
+    }
+
+    const found = addresses.find((a) => a.id === addrId);
+    if (found) {
+      setFormData((prev) => ({
+        ...prev,
+        nama: found.nama,
+        whatsapp: found.whatsapp,
+        alamat: found.alamat,
+        kecamatan: found.kecamatan,
+        kota: found.kotaKabupaten,
+        provinsi: found.provinsi,
+        kodePos: found.kodePos,
+      }));
+      setErrors({});
+    }
+  };
 
   // Format currency helper (IDR)
   const formatRupiah = (amount: number) => {
@@ -60,7 +159,6 @@ export default function CheckoutContent() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error on change
     if (errors[name as keyof CheckoutFormData]) {
       setErrors((prev) => ({ ...prev, [name]: undefined }));
     }
@@ -130,18 +228,69 @@ export default function CheckoutContent() {
       return;
     }
 
+    // If logged in and requested to save manual address to account
+    if (
+      isLoggedIn &&
+      saveAddressToAccount &&
+      (selectedAddressId === "manual" || addresses.length === 0)
+    ) {
+      addAddress({
+        label: "Rumah",
+        nama: formData.nama,
+        whatsapp: formData.whatsapp,
+        alamat: formData.alamat,
+        kecamatan: formData.kecamatan,
+        kotaKabupaten: formData.kota,
+        provinsi: formData.provinsi,
+        kodePos: formData.kodePos,
+        isDefault: addresses.length === 0,
+      });
+    }
+
     setIsSubmitting(true);
 
-    // Brief processing transition (local frontend state only, no server API)
     setTimeout(() => {
       setIsSubmitting(false);
       setIsConfirmed(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 600);
+    }, 550);
   };
 
-  // 1. Prevent hydration mismatch
-  if (!isHydrated) {
+  // Handle adding a new address in modal
+  const handleAddNewAddressModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAddrForm.nama.trim() || !newAddrForm.alamat.trim()) return;
+
+    const created = addAddress({
+      label: newAddrForm.label || "Rumah",
+      nama: newAddrForm.nama,
+      whatsapp: newAddrForm.whatsapp,
+      alamat: newAddrForm.alamat,
+      kecamatan: newAddrForm.kecamatan,
+      kotaKabupaten: newAddrForm.kotaKabupaten,
+      provinsi: newAddrForm.provinsi,
+      kodePos: newAddrForm.kodePos,
+      isDefault: newAddrForm.isDefault,
+    });
+
+    // Auto-select the newly added address
+    setSelectedAddressId(created.id);
+    setFormData((prev) => ({
+      ...prev,
+      nama: created.nama,
+      whatsapp: created.whatsapp,
+      alamat: created.alamat,
+      kecamatan: created.kecamatan,
+      kota: created.kotaKabupaten,
+      provinsi: created.provinsi,
+      kodePos: created.kodePos,
+    }));
+
+    setIsAddressModalOpen(false);
+  };
+
+  // 1. Loading state
+  if (!isHydrated || !isAuthHydrated) {
     return (
       <div className="w-full py-16 sm:py-24 text-center">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -158,9 +307,8 @@ export default function CheckoutContent() {
     return (
       <div className="w-full py-12 sm:py-20 lg:py-24">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header */}
           <div className="text-center max-w-xl mx-auto mb-10">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA · CHECKOUT
             </span>
             <h1 className="font-sans text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
@@ -168,9 +316,8 @@ export default function CheckoutContent() {
             </h1>
           </div>
 
-          {/* Empty Card */}
           <div className="max-w-md mx-auto rounded-3xl bg-brand-warm border border-border/80 p-8 sm:p-12 text-center">
-            <div className="w-14 h-14 rounded-full bg-white border border-border flex items-center justify-center mx-auto mb-5 text-muted-foreground shadow-sm">
+            <div className="w-14 h-14 rounded-full bg-white border border-border flex items-center justify-center mx-auto mb-5 text-brand-pink shadow-xs">
               <ShoppingBag className="w-6 h-6 stroke-[1.5]" />
             </div>
 
@@ -183,7 +330,7 @@ export default function CheckoutContent() {
 
             <Link
               href="/koleksi"
-              className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-all shadow-sm active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-all shadow-none active:scale-95"
             >
               <span>Jelajahi Koleksi</span>
               <ArrowRight className="w-4 h-4" />
@@ -194,18 +341,31 @@ export default function CheckoutContent() {
     );
   }
 
-  // 3. Order Confirmation State (Local UI state, no fake order ID)
+  // 3. Guest Guard: prevent flashing checkout form while redirecting to login
+  if (!isLoggedIn && !isConfirmed) {
+    return (
+      <div className="w-full py-16 sm:py-24 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-md mx-auto py-12 text-sm text-muted-foreground font-sans">
+            Mengarahkan ke halaman masuk...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Order Confirmation State
   if (isConfirmed) {
     return (
       <div className="w-full py-12 sm:py-16 lg:py-20">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="rounded-3xl bg-brand-warm border border-border/80 p-7 sm:p-10 shadow-sm text-center">
+          <div className="rounded-3xl bg-white border border-border/80 p-7 sm:p-10 shadow-sm text-center">
             {/* Confirmation Icon */}
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-foreground text-background flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-brand-pink-soft text-brand-pink-dark flex items-center justify-center mx-auto mb-6">
               <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9 stroke-[2]" />
             </div>
 
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA · KONFIRMASI PESANAN
             </span>
 
@@ -218,18 +378,21 @@ export default function CheckoutContent() {
             </p>
 
             <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto mb-2">
-              Informasi pesananmu sudah kami terima di halaman ini.
+              Informasi pesananmu sudah kami terima.
             </p>
 
             <p className="font-sans text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto mb-8">
-              Tim KREZOEMA akan mengonfirmasi detail pesanan dan pengiriman secara manual melalui WhatsApp{" "}
-              <strong className="text-foreground font-semibold">({formData.whatsapp})</strong>.
+              Tim KREZOEMA akan mengonfirmasi detail pesanan dan ongkos kirim melalui WhatsApp{" "}
+              <strong className="text-foreground font-semibold">
+                ({formData.whatsapp})
+              </strong>
+              .
             </p>
 
             {/* Order Summary Snapshot */}
-            <div className="bg-white rounded-2xl border border-border/80 p-5 sm:p-6 text-left mb-8 max-w-xl mx-auto space-y-4">
+            <div className="bg-brand-warm rounded-2xl border border-border/80 p-5 sm:p-6 text-left mb-8 max-w-xl mx-auto space-y-4">
               <h2 className="text-xs uppercase tracking-wider font-semibold text-muted-foreground border-b border-border/60 pb-2">
-                Ringkasan Informasi Pesanan
+                Ringkasan Informasi Pengiriman
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
@@ -267,21 +430,21 @@ export default function CheckoutContent() {
               </div>
             </div>
 
-            <div className="p-3 bg-secondary/50 rounded-xl max-w-xl mx-auto mb-8 text-[12px] text-muted-foreground">
-              Informasi pesanan siap dikonfirmasi. Periksa pesan WhatsApp Anda untuk verifikasi ongkir resmi dari admin KREZOEMA.
+            <div className="p-3 bg-brand-pink-soft/40 rounded-xl max-w-xl mx-auto mb-8 text-[12px] text-brand-pink-dark">
+              Detail pesanan telah tersimpan. Silakan tunggu konfirmasi estimasi ongkir dari WhatsApp admin KREZOEMA.
             </div>
 
             {/* Navigation Actions */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
                 href="/"
-                className="w-full sm:w-auto px-7 py-3 rounded-full bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-all shadow-sm active:scale-95"
+                className="w-full sm:w-auto px-7 py-3 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-all shadow-none active:scale-95"
               >
                 Kembali ke Beranda
               </Link>
               <Link
                 href="/koleksi"
-                className="w-full sm:w-auto px-7 py-3 rounded-full bg-white border border-border text-foreground font-semibold text-sm hover:bg-secondary transition-all"
+                className="w-full sm:w-auto px-7 py-3 rounded-full bg-white border border-border text-foreground font-semibold text-sm hover:border-brand-pink/50 hover:bg-brand-pink-soft/30 transition-all"
               >
                 Lihat Koleksi Lagi
               </Link>
@@ -302,38 +465,170 @@ export default function CheckoutContent() {
         {/* Page Header */}
         <div className="mb-8 sm:mb-12 pb-6 border-b border-border/60 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-1.5">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-1.5">
               KREZOEMA · CHECKOUT
             </span>
             <h1 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-bold sm:font-extrabold text-foreground tracking-tight mb-1">
               Lengkapi Pesananmu
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Isi informasi pengiriman berikut untuk melanjutkan pesanan.
+              Pilih alamat tersimpan atau isi alamat baru untuk pengiriman pesanan.
             </p>
           </div>
 
           <Link
             href="/keranjang"
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-colors self-start sm:self-auto"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-muted-foreground hover:text-brand-pink transition-colors self-start sm:self-auto"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Kembali ke Keranjang</span>
           </Link>
         </div>
 
+        {/* Customer Account Status */}
+        <div className="mb-8 p-4 rounded-2xl bg-brand-pink-soft/30 border border-brand-pink/20 flex items-center justify-between text-xs">
+          <span className="text-brand-pink-dark">
+            Checkout sebagai: <strong>{customer?.nama}</strong> ({customer?.email || customer?.whatsapp})
+          </span>
+          <Link
+            href="/akun"
+            className="text-brand-pink hover:text-brand-pink-dark font-semibold transition-colors"
+          >
+            Kelola Alamat
+          </Link>
+        </div>
+
         {/* Checkout Grid: 2/3 Form + 1/3 Summary */}
         <form onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
-            {/* Left Column (2/3 on Desktop): Customer Information & Shipping Method */}
+            {/* Left Column (2/3 on Desktop): Shipping Details */}
             <div className="lg:col-span-8 w-full space-y-8">
-              {/* Section 1: Informasi Pelanggan & Alamat Pengiriman */}
+              
+              {/* SECTION 1: SAVED ADDRESS SELECTOR (If logged in & addresses exist) */}
+              {isLoggedIn && addresses.length > 0 && (
+                <div className="rounded-3xl bg-white border border-border/80 p-6 sm:p-8 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                    <div>
+                      <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground">
+                        Pilih Alamat Pengiriman
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pilih salah satu alamat tersimpan di akunmu.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewAddrForm({
+                          label: "Rumah",
+                          nama: customer?.nama || "",
+                          whatsapp: customer?.whatsapp || "",
+                          alamat: "",
+                          kecamatan: "",
+                          kotaKabupaten: "",
+                          provinsi: "",
+                          kodePos: "",
+                          isDefault: false,
+                        });
+                        setIsAddressModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-pink hover:text-brand-pink-dark self-start sm:self-auto"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Alamat Baru</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {addresses.map((addr) => {
+                      const isSelected = selectedAddressId === addr.id;
+                      return (
+                        <label
+                          key={addr.id}
+                          onClick={() => handleSelectSavedAddress(addr.id)}
+                          className={`cursor-pointer rounded-2xl border p-4 sm:p-5 transition-all flex items-start gap-3.5 ${
+                            isSelected
+                              ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
+                              : "border-border bg-white hover:border-brand-pink/30 hover:bg-brand-warm/50"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="savedAddressRadio"
+                            value={addr.id}
+                            checked={isSelected}
+                            onChange={() => handleSelectSavedAddress(addr.id)}
+                            className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-xs px-2.5 py-0.5 rounded-full bg-white border border-border text-foreground">
+                                {addr.label}
+                              </span>
+                              {addr.isDefault && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-pink-dark bg-brand-pink-soft px-2 py-0.5 rounded-full">
+                                  <Star className="w-2.5 h-2.5 fill-brand-pink text-brand-pink" />
+                                  <span>Utama</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-bold text-foreground">
+                              {addr.nama}{" "}
+                              <span className="text-xs font-normal text-muted-foreground">
+                                ({addr.whatsapp})
+                              </span>
+                            </p>
+                            <p className="text-xs text-foreground/80 leading-relaxed mt-1">
+                              {addr.alamat}, {addr.kecamatan}, {addr.kotaKabupaten},{" "}
+                              {addr.provinsi} {addr.kodePos}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+
+                    {/* Option: Input manual or different address */}
+                    <label
+                      onClick={() => handleSelectSavedAddress("manual")}
+                      className={`cursor-pointer rounded-2xl border p-4 transition-all flex items-start gap-3.5 ${
+                        selectedAddressId === "manual"
+                          ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
+                          : "border-border bg-white hover:border-brand-pink/30 hover:bg-brand-warm/50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="savedAddressRadio"
+                        value="manual"
+                        checked={selectedAddressId === "manual"}
+                        onChange={() => handleSelectSavedAddress("manual")}
+                        className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
+                      />
+                      <div>
+                        <span className="font-bold text-xs sm:text-sm text-foreground block">
+                          Gunakan Alamat Lain / Input Manual
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Kirim ke alamat lain untuk pesanan ini
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 2: FORM DETAIL ALAMAT (Visible if guest, if 'manual' selected, or for editing) */}
               <div className="rounded-3xl bg-white border border-border/80 p-6 sm:p-8 shadow-sm">
-                <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground mb-1">
-                  Informasi Pengiriman
-                </h2>
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground">
+                    {isLoggedIn && addresses.length > 0 && selectedAddressId !== "manual"
+                      ? "Detail Alamat Terpilih"
+                      : "Informasi Pengiriman"}
+                  </h2>
+                </div>
                 <p className="text-xs sm:text-sm text-muted-foreground mb-6">
-                  Pastikan alamat dan nomor kontak aktif untuk kemudahan pengiriman kurir.
+                  Pastikan alamat dan nomor kontak aktif untuk kemudahan kurir.
                 </p>
 
                 <div className="space-y-4 sm:space-y-5">
@@ -343,7 +638,7 @@ export default function CheckoutContent() {
                       htmlFor="nama"
                       className="block text-xs sm:text-sm font-semibold text-foreground mb-1.5"
                     >
-                      Nama Lengkap <span className="text-rose-500">*</span>
+                      Nama Penerima <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -358,7 +653,7 @@ export default function CheckoutContent() {
                       className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 ${
                         errors.nama
                           ? "border-rose-500 focus:ring-rose-500/20"
-                          : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                          : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                       }`}
                     />
                     {errors.nama && (
@@ -390,7 +685,7 @@ export default function CheckoutContent() {
                       className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 ${
                         errors.whatsapp
                           ? "border-rose-500 focus:ring-rose-500/20"
-                          : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                          : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                       }`}
                     />
                     {errors.whatsapp && (
@@ -422,7 +717,7 @@ export default function CheckoutContent() {
                       className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 resize-none ${
                         errors.alamat
                           ? "border-rose-500 focus:ring-rose-500/20"
-                          : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                          : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                       }`}
                     />
                     {errors.alamat && (
@@ -433,7 +728,7 @@ export default function CheckoutContent() {
                     )}
                   </div>
 
-                  {/* Kecamatan & Kota/Kabupaten (2 columns on sm+) */}
+                  {/* Kecamatan & Kota */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label
@@ -455,7 +750,7 @@ export default function CheckoutContent() {
                         className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 ${
                           errors.kecamatan
                             ? "border-rose-500 focus:ring-rose-500/20"
-                            : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                            : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                         }`}
                       />
                       {errors.kecamatan && (
@@ -486,7 +781,7 @@ export default function CheckoutContent() {
                         className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 ${
                           errors.kota
                             ? "border-rose-500 focus:ring-rose-500/20"
-                            : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                            : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                         }`}
                       />
                       {errors.kota && (
@@ -498,7 +793,7 @@ export default function CheckoutContent() {
                     </div>
                   </div>
 
-                  {/* Provinsi & Kode Pos (2 columns on sm+) */}
+                  {/* Provinsi & Kode Pos */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label
@@ -520,7 +815,7 @@ export default function CheckoutContent() {
                         className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 ${
                           errors.provinsi
                             ? "border-rose-500 focus:ring-rose-500/20"
-                            : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                            : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                         }`}
                       />
                       {errors.provinsi && (
@@ -552,7 +847,7 @@ export default function CheckoutContent() {
                         className={`w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 ${
                           errors.kodePos
                             ? "border-rose-500 focus:ring-rose-500/20"
-                            : "border-border focus:ring-brand-purple/20 focus:border-brand-purple"
+                            : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
                         }`}
                       />
                       {errors.kodePos && (
@@ -564,7 +859,22 @@ export default function CheckoutContent() {
                     </div>
                   </div>
 
-                  {/* Catatan Pesanan (Optional) */}
+                  {/* Save to customer account option if logged in and typing manual */}
+                  {isLoggedIn && (selectedAddressId === "manual" || addresses.length === 0) && (
+                    <div className="pt-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={saveAddressToAccount}
+                          onChange={(e) => setSaveAddressToAccount(e.target.checked)}
+                          className="rounded border-border text-brand-pink focus:ring-brand-pink w-4 h-4"
+                        />
+                        <span>Simpan alamat ini ke buku alamat saya untuk checkout berikutnya</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Catatan Pesanan */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label
@@ -583,23 +893,23 @@ export default function CheckoutContent() {
                       rows={2}
                       value={formData.catatan}
                       onChange={handleInputChange}
-                      placeholder="Tambahkan catatan jika diperlukan..."
-                      className="w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-purple/20 focus:border-brand-purple resize-none"
+                      placeholder="Tambahkan catatan khusus jika diperlukan..."
+                      className="w-full px-4 py-2.5 sm:py-3 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink resize-none"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Section 2: Pilihan Pengiriman (Selectable Radio Cards) */}
+              {/* SECTION 3: METODE PENGIRIMAN */}
               <div className="rounded-3xl bg-white border border-border/80 p-6 sm:p-8 shadow-sm">
                 <div className="flex items-center gap-2 mb-1">
-                  <Truck className="w-5 h-5 text-foreground stroke-[1.8]" />
+                  <Truck className="w-5 h-5 text-brand-pink stroke-[1.8]" />
                   <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground">
                     Metode Pengiriman
                   </h2>
                 </div>
                 <p className="text-xs sm:text-sm text-muted-foreground mb-5">
-                  Pilih ekspedisi pengiriman reguler. Biaya ongkos kirim akan dikonfirmasi secara manual oleh admin.
+                  Pilih ekspedisi reguler. Biaya ongkir akan diverifikasi oleh admin KREZOEMA via WhatsApp.
                 </p>
 
                 <div
@@ -612,8 +922,8 @@ export default function CheckoutContent() {
                     onClick={() => handleShippingChange("J&T")}
                     className={`cursor-pointer rounded-2xl border p-4 transition-all flex items-start gap-3.5 ${
                       formData.metodePengiriman === "J&T"
-                        ? "border-foreground bg-brand-warm/60 shadow-sm ring-1 ring-foreground"
-                        : "border-border bg-white hover:border-foreground/40 hover:bg-brand-warm/30"
+                        ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
+                        : "border-border bg-white hover:border-brand-pink/40 hover:bg-brand-warm/40"
                     }`}
                   >
                     <input
@@ -622,14 +932,14 @@ export default function CheckoutContent() {
                       value="J&T"
                       checked={formData.metodePengiriman === "J&T"}
                       onChange={() => handleShippingChange("J&T")}
-                      className="mt-1 w-4 h-4 text-foreground focus:ring-brand-purple border-border"
+                      className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
                     />
                     <div>
                       <span className="font-sans text-sm font-bold text-foreground block">
                         J&amp;T
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Pengiriman reguler melalui J&amp;T
+                        Pengiriman reguler J&amp;T Express
                       </span>
                     </div>
                   </label>
@@ -639,8 +949,8 @@ export default function CheckoutContent() {
                     onClick={() => handleShippingChange("JNE")}
                     className={`cursor-pointer rounded-2xl border p-4 transition-all flex items-start gap-3.5 ${
                       formData.metodePengiriman === "JNE"
-                        ? "border-foreground bg-brand-warm/60 shadow-sm ring-1 ring-foreground"
-                        : "border-border bg-white hover:border-foreground/40 hover:bg-brand-warm/30"
+                        ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
+                        : "border-border bg-white hover:border-brand-pink/40 hover:bg-brand-warm/40"
                     }`}
                   >
                     <input
@@ -649,14 +959,14 @@ export default function CheckoutContent() {
                       value="JNE"
                       checked={formData.metodePengiriman === "JNE"}
                       onChange={() => handleShippingChange("JNE")}
-                      className="mt-1 w-4 h-4 text-foreground focus:ring-brand-purple border-border"
+                      className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
                     />
                     <div>
                       <span className="font-sans text-sm font-bold text-foreground block">
                         JNE
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        Pengiriman reguler melalui JNE
+                        Pengiriman reguler JNE Reguler
                       </span>
                     </div>
                   </label>
@@ -678,7 +988,7 @@ export default function CheckoutContent() {
                   <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground">
                     Ringkasan Pesanan
                   </h2>
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="text-xs font-semibold text-brand-pink bg-brand-pink-soft px-2 py-0.5 rounded-full">
                     {totalQuantity} item
                   </span>
                 </div>
@@ -690,7 +1000,6 @@ export default function CheckoutContent() {
 
                     return (
                       <div key={item.id} className="py-3.5 flex items-start gap-3">
-                        {/* Thumbnail */}
                         <div className="w-12 h-12 rounded-lg bg-white border border-border/60 shrink-0 flex items-center justify-center overflow-hidden">
                           <div className="scale-50">
                             {item.product.category === "manik-kaca" && (
@@ -727,7 +1036,6 @@ export default function CheckoutContent() {
                           </div>
                         </div>
 
-                        {/* Details */}
                         <div className="flex-1 min-w-0">
                           <h3 className="font-sans text-xs sm:text-sm font-semibold text-foreground truncate">
                             {item.product.name}
@@ -769,7 +1077,7 @@ export default function CheckoutContent() {
                       </span>
                     </div>
                     <span className="font-medium text-foreground text-right text-xs">
-                      Dikonfirmasi setelah pesanan
+                      Dikonfirmasi via WA
                     </span>
                   </div>
                 </div>
@@ -777,11 +1085,11 @@ export default function CheckoutContent() {
                 {/* Total Preview */}
                 <div className="py-4 flex items-baseline justify-between">
                   <div>
-                    <span className="text-xs uppercase tracking-wider text-muted-foreground block font-semibold">
+                    <span className="text-xs uppercase tracking-wider text-brand-pink block font-semibold">
                       Total Produk
                     </span>
                     <span className="text-[11px] text-muted-foreground font-normal">
-                      Belum termasuk ongkos kirim
+                      Belum termasuk ongkir
                     </span>
                   </div>
                   <span className="font-sans text-xl font-bold text-foreground">
@@ -793,7 +1101,7 @@ export default function CheckoutContent() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full h-12 rounded-full bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                  className="w-full h-12 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-all flex items-center justify-center gap-2 shadow-none active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {isSubmitting ? (
                     <span>Memproses...</span>
@@ -815,6 +1123,193 @@ export default function CheckoutContent() {
           </div>
         </form>
       </div>
+
+      {/* QUICK ADD ADDRESS MODAL IN CHECKOUT */}
+      {isAddressModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-border max-w-md w-full p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150 my-8">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/60">
+              <h3 className="font-sans text-base font-bold text-foreground">
+                Tambah Alamat Baru
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddressModalOpen(false)}
+                className="p-1 rounded-full text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddNewAddressModal} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Label
+                </label>
+                <div className="flex gap-2">
+                  {["Rumah", "Kantor", "Kos"].map((lbl) => (
+                    <button
+                      key={lbl}
+                      type="button"
+                      onClick={() =>
+                        setNewAddrForm((prev) => ({ ...prev, label: lbl }))
+                      }
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        newAddrForm.label === lbl
+                          ? "bg-brand-pink text-white"
+                          : "bg-brand-warm text-muted-foreground border border-border"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Nama Penerima
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newAddrForm.nama}
+                  onChange={(e) =>
+                    setNewAddrForm((prev) => ({ ...prev, nama: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Nomor WhatsApp
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={newAddrForm.whatsapp}
+                  onChange={(e) =>
+                    setNewAddrForm((prev) => ({
+                      ...prev,
+                      whatsapp: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1">
+                  Alamat Lengkap
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={newAddrForm.alamat}
+                  onChange={(e) =>
+                    setNewAddrForm((prev) => ({
+                      ...prev,
+                      alamat: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Kecamatan
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAddrForm.kecamatan}
+                    onChange={(e) =>
+                      setNewAddrForm((prev) => ({
+                        ...prev,
+                        kecamatan: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Kota / Kabupaten
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAddrForm.kotaKabupaten}
+                    onChange={(e) =>
+                      setNewAddrForm((prev) => ({
+                        ...prev,
+                        kotaKabupaten: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Provinsi
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAddrForm.provinsi}
+                    onChange={(e) =>
+                      setNewAddrForm((prev) => ({
+                        ...prev,
+                        provinsi: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1">
+                    Kode Pos
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newAddrForm.kodePos}
+                    onChange={(e) =>
+                      setNewAddrForm((prev) => ({
+                        ...prev,
+                        kodePos: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-border text-xs focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/60">
+                <button
+                  type="button"
+                  onClick={() => setIsAddressModalOpen(false)}
+                  className="px-4 py-1.5 rounded-full border border-border text-xs font-medium text-foreground hover:bg-secondary"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-1.5 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark transition-colors"
+                >
+                  Gunakan Alamat Ini
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

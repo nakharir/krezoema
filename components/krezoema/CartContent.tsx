@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 import { Minus, Plus, Trash2, ArrowRight, ArrowLeft, ShoppingBag } from "lucide-react";
 
 export default function CartContent() {
@@ -15,6 +16,7 @@ export default function CartContent() {
     cartItemCount,
     isHydrated,
   } = useCart();
+  const { isLoggedIn } = useAuth();
 
   const [confirmClear, setConfirmClear] = useState<boolean>(false);
 
@@ -48,7 +50,7 @@ export default function CartContent() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Header */}
           <div className="text-center max-w-xl mx-auto mb-10">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA · KERANJANG
             </span>
             <h1 className="font-sans text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
@@ -58,7 +60,7 @@ export default function CartContent() {
 
           {/* Empty Card */}
           <div className="max-w-md mx-auto rounded-3xl bg-brand-warm border border-border/80 p-8 sm:p-12 text-center">
-            <div className="w-14 h-14 rounded-full bg-white border border-border flex items-center justify-center mx-auto mb-5 text-muted-foreground shadow-sm">
+            <div className="w-14 h-14 rounded-full bg-white border border-border flex items-center justify-center mx-auto mb-5 text-brand-pink shadow-xs">
               <ShoppingBag className="w-6 h-6 stroke-[1.5]" />
             </div>
 
@@ -71,7 +73,7 @@ export default function CartContent() {
 
             <Link
               href="/koleksi"
-              className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-all shadow-sm active:scale-95"
+              className="inline-flex items-center justify-center gap-2 px-7 py-3 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-all shadow-none active:scale-95"
             >
               <span>Jelajahi Koleksi</span>
               <ArrowRight className="w-4 h-4" />
@@ -169,7 +171,7 @@ export default function CartContent() {
                         <h2 className="font-sans text-sm sm:text-base font-semibold text-foreground truncate">
                           <Link
                             href={`/produk/${item.product.slug}`}
-                            className="hover:text-brand-purple transition-colors"
+                            className="hover:text-brand-pink transition-colors"
                           >
                             {item.product.name}
                           </Link>
@@ -316,10 +318,10 @@ export default function CartContent() {
                 </span>
               </div>
 
-              {/* Checkout CTA: points to /checkout */}
+              {/* Checkout CTA: points to /checkout if logged in, otherwise /login?redirect=/checkout */}
               <Link
-                href="/checkout"
-                className="w-full h-12 rounded-full bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 shadow-sm active:scale-[0.99]"
+                href={isLoggedIn ? "/checkout" : "/login?redirect=/checkout"}
+                className="w-full h-12 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-all flex items-center justify-center gap-2 shadow-none active:scale-[0.99]"
               >
                 <span>Lanjut ke Checkout</span>
                 <ArrowRight className="w-4 h-4" />

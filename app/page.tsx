@@ -10,7 +10,7 @@ import Footer from "@/components/krezoema/Footer";
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-purple/10 selection:text-brand-purple">
+    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-pink-soft selection:text-brand-pink-dark">
       {/* Boutique Navigation Header */}
       <Navbar />
 

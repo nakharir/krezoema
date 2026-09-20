@@ -19,14 +19,14 @@ export const metadata: Metadata = {
 
 export default function CeritaKamiPage() {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-purple/10 selection:text-brand-purple">
+    <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-brand-pink-soft selection:text-brand-pink-dark">
       <Navbar />
 
       <main className="flex-1 w-full overflow-x-hidden">
         {/* Header */}
         <section className="bg-brand-warm border-b border-border/60 py-12 sm:py-16 lg:py-20">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+            <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
               KREZOEMA · TENTANG KAMI
             </span>
             <h1 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold sm:font-extrabold text-foreground tracking-tight leading-[1.15] mb-4">
@@ -79,7 +79,7 @@ export default function CeritaKamiPage() {
             </p>
             <Link
               href="/koleksi"
-              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-foreground text-background font-semibold text-sm hover:bg-foreground/90 transition-all shadow-sm"
+              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-all shadow-none"
             >
               <span>Jelajahi Koleksi</span>
               <ArrowRight className="w-4 h-4" />

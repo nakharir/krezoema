@@ -13,7 +13,7 @@ export default function ProductCard({ product }: ProductCardProps) {
   return (
     <Link
       href={`/produk/${product.slug}`}
-      className="group flex flex-col justify-between rounded-2xl bg-white border border-border p-3 sm:p-4 transition-all duration-200 hover:border-foreground/25 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30"
+      className="group flex flex-col justify-between rounded-2xl bg-white border border-border p-3 sm:p-4 transition-all duration-200 hover:border-brand-pink/40 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-pink"
       aria-label={`${product.name} - ${product.formattedPrice}`}
     >
       {/* 1. Product Visual Area */}
@@ -71,7 +71,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           </span>
 
           {/* 2. Nama Produk */}
-          <h3 className="font-sans text-xs sm:text-base font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-brand-purple transition-colors">
+          <h3 className="font-sans text-xs sm:text-base font-semibold text-foreground leading-snug line-clamp-2 group-hover:text-brand-pink transition-colors">
             {product.name}
           </h3>
         </div>
@@ -82,7 +82,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             {product.formattedPrice}
           </span>
 
-          <span className="text-[11px] sm:text-xs font-semibold text-foreground group-hover:text-brand-purple transition-colors shrink-0">
+          <span className="text-[11px] sm:text-xs font-semibold text-brand-pink hover:text-brand-pink-dark transition-colors shrink-0">
             Detail
           </span>
         </div>

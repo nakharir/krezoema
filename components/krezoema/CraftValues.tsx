@@ -37,7 +37,7 @@ export default function CraftValues() {
         
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-12 sm:mb-16">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground font-semibold block mb-2">
+          <span className="text-xs uppercase tracking-wider text-brand-pink font-semibold block mb-2">
             Pilar Identitas
           </span>
           <h2 className="font-sans text-3xl sm:text-4xl lg:text-5xl font-bold sm:font-extrabold text-foreground tracking-tight">
@@ -53,19 +53,19 @@ export default function CraftValues() {
           {pillars.map((pillar) => (
             <div
               key={pillar.code}
-              className="relative rounded-2xl bg-white border border-border p-7 sm:p-8 flex flex-col justify-between overflow-hidden shadow-sm"
+              className="relative rounded-2xl bg-white border border-border p-7 sm:p-8 flex flex-col justify-between overflow-hidden shadow-sm hover:border-brand-pink/30 transition-colors"
             >
               {/* Flat Clean Watermark Typography */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute -top-3 -right-2 font-sans text-7xl font-black text-black/[0.03] select-none"
+                className="pointer-events-none absolute -top-3 -right-2 font-sans text-7xl font-black text-brand-pink/[0.04] select-none"
               >
                 {pillar.code}
               </div>
 
               {/* Code Header */}
               <div className="relative z-10 mb-6">
-                <span className="font-sans text-2xl font-extrabold text-foreground tracking-tight">
+                <span className="font-sans text-2xl font-extrabold text-brand-pink tracking-tight">
                   {pillar.code}
                 </span>
                 <span className="block text-xs uppercase tracking-wider text-muted-foreground font-semibold mt-1">
