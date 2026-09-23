@@ -14,6 +14,8 @@ export interface CartItem {
   id: string; // Deterministic ID: slug + sorted variant entries
   product: Product;
   selectedVariants: Record<string, string>;
+  // Present for API-backed variants; legacy/mock items intentionally remain null.
+  selectedVariantId?: number | null;
   quantity: number;
 }
 
@@ -22,7 +24,8 @@ interface CartContextType {
   addToCart: (
     product: Product,
     selectedVariants: Record<string, string>,
-    quantity?: number
+    quantity?: number,
+    selectedVariantId?: number | null
   ) => void;
   removeFromCart: (itemId: string) => void;
   updateQuantity: (itemId: string, newQuantity: number) => void;
@@ -88,7 +91,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     (
       product: Product,
       selectedVariants: Record<string, string>,
-      quantity: number = 1
+      quantity: number = 1,
+      selectedVariantId: number | null = null
     ) => {
       const validQty = Math.max(1, Math.floor(quantity));
       const itemId = generateCartItemId(product.slug, selectedVariants);
@@ -101,6 +105,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           updated[existingIndex] = {
             ...updated[existingIndex],
             quantity: updated[existingIndex].quantity + validQty,
+            selectedVariantId: updated[existingIndex].selectedVariantId ?? selectedVariantId,
           };
           return updated;
         }
@@ -111,6 +116,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             id: itemId,
             product,
             selectedVariants,
+            selectedVariantId,
             quantity: validQty,
           },
         ];

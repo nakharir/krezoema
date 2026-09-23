@@ -26,6 +26,8 @@ export default function AkunPage() {
   const {
     customer,
     addresses,
+    isAddressesLoading,
+    addressError,
     isLoggedIn,
     isHydrated,
     updateProfile,
@@ -43,6 +45,8 @@ export default function AkunPage() {
     whatsapp: "",
     email: "",
   });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Address Modal State (Add or Edit)
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
@@ -59,6 +63,9 @@ export default function AkunPage() {
     isDefault: false,
   });
   const [addressErrors, setAddressErrors] = useState<Record<string, string>>({});
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [addressActionError, setAddressActionError] = useState<string | null>(null);
+  const [addressActionId, setAddressActionId] = useState<string | null>(null);
 
   // Active section tab (profil/alamat/pesanan)
   const [activeTab, setActiveTab] = useState<"profil-alamat" | "pesanan">(
@@ -113,7 +120,7 @@ export default function AkunPage() {
   };
 
   // Validate and submit address modal
-  const handleSaveAddress = (e: React.FormEvent) => {
+  const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs: Record<string, string> = {};
 
@@ -131,21 +138,85 @@ export default function AkunPage() {
       return;
     }
 
-    if (editingAddressId) {
-      updateAddress(editingAddressId, addressForm);
-    } else {
-      addAddress(addressForm);
+    setIsSavingAddress(true);
+    setAddressActionError(null);
+    try {
+      if (editingAddressId) {
+        await updateAddress(editingAddressId, addressForm);
+      } else {
+        await addAddress(addressForm);
+      }
+      setIsAddressModalOpen(false);
+    } catch (error: any) {
+      setAddressActionError(error?.response?.data?.message || "Gagal menyimpan alamat. Silakan coba lagi.");
+    } finally {
+      setIsSavingAddress(false);
     }
-
-    setIsAddressModalOpen(false);
   };
 
-  // Submit profile edit
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSetDefaultAddress = async (id: string) => {
+    setAddressActionId(id);
+    setAddressActionError(null);
+    try {
+      await setDefaultAddress(id);
+    } catch {
+      setAddressActionError("Gagal mengatur alamat utama. Silakan coba lagi.");
+    } finally {
+      setAddressActionId(null);
+    }
+  };
+
+  const handleDeleteAddress = async (id: string, label: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus alamat "${label}"?`)) return;
+    setAddressActionId(id);
+    setAddressActionError(null);
+    try {
+      await deleteAddress(id);
+    } catch {
+      setAddressActionError("Gagal menghapus alamat. Silakan coba lagi.");
+    } finally {
+      setAddressActionId(null);
+    }
+  };
+
+  // Logout State
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Submit profile edit to backend
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profileForm.nama.trim()) return;
-    updateProfile(profileForm);
-    setIsEditingProfile(false);
+    if (!profileForm.nama.trim() || !profileForm.email.trim()) return;
+
+    setIsSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      const res = await updateProfile({
+        name: profileForm.nama.trim(),
+        email: profileForm.email.trim(),
+        whatsapp: profileForm.whatsapp.trim(),
+      });
+
+      if (res.success) {
+        setIsEditingProfile(false);
+      } else {
+        setProfileError(res.error || "Gagal memperbarui profil.");
+      }
+    } catch {
+      setProfileError("Terjadi kesalahan. Silakan coba lagi.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      router.push("/login");
+    }
   };
 
   if (!isHydrated) {
@@ -221,11 +292,12 @@ export default function AkunPage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={logout}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-white text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-white text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Keluar</span>
+                <span>{isLoggingOut ? "Keluar..." : "Keluar"}</span>
               </button>
             </div>
           </div>
@@ -333,7 +405,15 @@ export default function AkunPage() {
                 </div>
 
                 {/* Address Cards List */}
-                {addresses.length === 0 ? (
+                {addressError || addressActionError ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    {addressActionError || addressError}
+                  </div>
+                ) : isAddressesLoading ? (
+                  <div className="bg-white rounded-3xl border border-border/80 p-8 text-center text-sm text-muted-foreground">
+                    Memuat alamat...
+                  </div>
+                ) : addresses.length === 0 ? (
                   <div className="bg-white rounded-3xl border border-border/80 p-8 sm:p-12 text-center">
                     <div className="w-12 h-12 rounded-full bg-brand-pink-soft text-brand-pink-dark flex items-center justify-center mx-auto mb-4">
                       <MapPin className="w-6 h-6 stroke-[1.8]" />
@@ -406,10 +486,11 @@ export default function AkunPage() {
                             {!addr.isDefault && (
                               <button
                                 type="button"
-                                onClick={() => setDefaultAddress(addr.id)}
-                                className="font-semibold text-brand-pink hover:text-brand-pink-dark transition-colors"
+                                onClick={() => handleSetDefaultAddress(addr.id)}
+                                disabled={addressActionId === addr.id}
+                                className="font-semibold text-brand-pink hover:text-brand-pink-dark transition-colors disabled:opacity-60"
                               >
-                                Set Alamat Utama
+                                {addressActionId === addr.id ? "Mengatur..." : "Set Alamat Utama"}
                               </button>
                             )}
                           </div>
@@ -425,19 +506,12 @@ export default function AkunPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => {
-                                if (
-                                  confirm(
-                                    `Apakah Anda yakin ingin menghapus alamat "${addr.label}"?`
-                                  )
-                                ) {
-                                  deleteAddress(addr.id);
-                                }
-                              }}
-                              className="font-medium text-rose-600 hover:text-rose-700 flex items-center gap-1 transition-colors"
+                              onClick={() => handleDeleteAddress(addr.id, addr.label)}
+                              disabled={addressActionId === addr.id}
+                              className="font-medium text-rose-600 hover:text-rose-700 flex items-center gap-1 transition-colors disabled:opacity-60"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>Hapus</span>
+                              <span>{addressActionId === addr.id ? "Menghapus..." : "Hapus"}</span>
                             </button>
                           </div>
                         </div>
@@ -500,6 +574,13 @@ export default function AkunPage() {
               </button>
             </div>
 
+            {profileError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{profileError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1">
@@ -529,7 +610,6 @@ export default function AkunPage() {
                       whatsapp: e.target.value,
                     }))
                   }
-                  required
                   className="w-full px-3.5 py-2 rounded-xl bg-white border border-border text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink"
                 />
               </div>
@@ -553,15 +633,17 @@ export default function AkunPage() {
                 <button
                   type="button"
                   onClick={() => setIsEditingProfile(false)}
-                  className="px-4 py-2 rounded-full border border-border text-xs font-medium text-foreground hover:bg-secondary"
+                  disabled={isSavingProfile}
+                  className="px-4 py-2 rounded-full border border-border text-xs font-medium text-foreground hover:bg-secondary disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark transition-colors"
+                  disabled={isSavingProfile}
+                  className="px-5 py-2 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark disabled:opacity-60 transition-colors"
                 >
-                  Simpan Perubahan
+                  {isSavingProfile ? "Menyimpan..." : "Simpan Perubahan"}
                 </button>
               </div>
             </form>
@@ -807,15 +889,17 @@ export default function AkunPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddressModalOpen(false)}
+                  disabled={isSavingAddress}
                   className="px-4 py-2 rounded-full border border-border text-xs font-medium text-foreground hover:bg-secondary"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark transition-colors shadow-none"
+                  disabled={isSavingAddress}
+                  className="px-5 py-2 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark transition-colors shadow-none disabled:opacity-60"
                 >
-                  {editingAddressId ? "Simpan Perubahan" : "Tambah Alamat"}
+                  {isSavingAddress ? "Menyimpan..." : editingAddressId ? "Simpan Perubahan" : "Tambah Alamat"}
                 </button>
               </div>
             </form>

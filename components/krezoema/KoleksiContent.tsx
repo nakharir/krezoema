@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { mockProducts, craftCategories } from "@/data/mockProducts";
 import ProductCard from "./ProductCard";
-import { Search, X, RotateCcw, ArrowUpDown } from "lucide-react";
+import { Search, X, RotateCcw, ArrowUpDown, Loader2 } from "lucide-react";
+import { getProducts, getCategories } from "@/lib/api/ecommerce";
+import type { ApiProduct, ApiCategory, PaginationMeta } from "@/lib/api/types";
 
-type SortOption = "terbaru" | "nama-asc" | "harga-asc" | "harga-desc";
+type SortOption = "latest" | "oldest" | "price_asc" | "price_desc" | "name_asc" | "name_desc";
 
 export default function KoleksiContent() {
   const router = useRouter();
@@ -14,68 +15,121 @@ export default function KoleksiContent() {
   const searchParams = useSearchParams();
 
   // Read initial states from URL query parameters
-  const initialCategory = searchParams.get("kategori") || "semua";
+  const initialCategory = searchParams.get("category") || searchParams.get("kategori") || "semua";
   const initialSearch = searchParams.get("search") || "";
-  const initialSort = (searchParams.get("sort") as SortOption) || "terbaru";
+  const initialSort = (searchParams.get("sort") as SortOption) || "latest";
+  const initialPage = parseInt(searchParams.get("page") || "1", 10);
 
   const [activeCategory, setActiveCategory] = useState<string>(initialCategory);
   const [searchQuery, setSearchQuery] = useState<string>(initialSearch);
   const [sortBy, setSortBy] = useState<SortOption>(initialSort);
+  const [currentPage, setCurrentPage] = useState<number>(initialPage);
+
+  // Data state
+  const [products, setProducts] = useState<ApiProduct[]>([]);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isCategoriesLoading, setIsCategoriesLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Sync state when URL searchParams change externally (e.g. browser back/forward)
   useEffect(() => {
-    const cat = searchParams.get("kategori") || "semua";
+    const cat = searchParams.get("category") || searchParams.get("kategori") || "semua";
     const q = searchParams.get("search") || "";
-    const s = (searchParams.get("sort") as SortOption) || "terbaru";
+    const s = (searchParams.get("sort") as SortOption) || "latest";
+    const p = parseInt(searchParams.get("page") || "1", 10);
 
     setActiveCategory((prev) => (prev !== cat ? cat : prev));
     setSortBy((prev) => (prev !== s ? s : prev));
     setSearchQuery((prev) => (prev !== q ? q : prev));
+    setCurrentPage((prev) => (prev !== p ? p : prev));
   }, [searchParams]);
 
-  // Debounced URL sync for typing in search
+  // Fetch categories on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const currentUrlCategory = searchParams.get("kategori") || "semua";
-      const currentUrlSearch = searchParams.get("search") || "";
-      const currentUrlSort = searchParams.get("sort") || "terbaru";
-
-      const categoryMatches = activeCategory === currentUrlCategory;
-      const searchMatches = searchQuery.trim() === currentUrlSearch.trim();
-      const sortMatches = sortBy === currentUrlSort;
-
-      if (!categoryMatches || !searchMatches || !sortMatches) {
-        const params = new URLSearchParams();
-        if (activeCategory && activeCategory !== "semua") {
-          params.set("kategori", activeCategory);
+    let cancelled = false;
+    async function fetchCategories() {
+      setIsCategoriesLoading(true);
+      try {
+        const data = await getCategories();
+        if (!cancelled) {
+          setCategories(data);
         }
-        if (searchQuery && searchQuery.trim() !== "") {
-          params.set("search", searchQuery.trim());
+      } catch {
+        // Categories are non-critical; silently fail and show empty category list
+        if (!cancelled) {
+          setCategories([]);
         }
-        if (sortBy && sortBy !== "terbaru") {
-          params.set("sort", sortBy);
+      } finally {
+        if (!cancelled) {
+          setIsCategoriesLoading(false);
         }
-        const queryString = params.toString();
-        const targetUrl = queryString ? `${pathname}?${queryString}` : pathname;
-        router.replace(targetUrl, { scroll: false });
       }
-    }, 250);
+    }
+    fetchCategories();
+    return () => { cancelled = true; };
+  }, []);
 
-    return () => clearTimeout(timer);
-  }, [activeCategory, searchQuery, sortBy, pathname, router, searchParams]);
+  // Fetch products when filter/sort/page changes
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchProducts() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const params: Record<string, string | number> = {};
+        if (activeCategory && activeCategory !== "semua") {
+          params.category = activeCategory;
+        }
+        const searchTerm = searchParams.get("search") || "";
+        if (searchTerm.trim()) {
+          params.search = searchTerm.trim();
+        }
+        if (sortBy && sortBy !== "latest") {
+          params.sort = sortBy;
+        }
+        if (currentPage > 1) {
+          params.page = currentPage;
+        }
+        params.per_page = 12;
 
-  // Direct URL update helper for immediate actions (category click, sort change, clear, reset)
-  const updateUrlImmediately = useCallback(
-    (catSlug: string, searchVal: string, sortVal: SortOption) => {
+        const response = await getProducts(params);
+        if (!cancelled) {
+          setProducts(response.data);
+          setPagination(response.meta);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Produk belum dapat dimuat. Silakan coba lagi.");
+          setProducts([]);
+          setPagination(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+    fetchProducts();
+    return () => { cancelled = true; };
+  }, [activeCategory, sortBy, currentPage, searchParams]);
+
+  // Direct URL update helper for immediate actions
+  const updateUrl = useCallback(
+    (catSlug: string, searchVal: string, sortVal: SortOption, page: number = 1) => {
       const params = new URLSearchParams();
       if (catSlug && catSlug !== "semua") {
-        params.set("kategori", catSlug);
+        params.set("category", catSlug);
       }
       if (searchVal && searchVal.trim() !== "") {
         params.set("search", searchVal.trim());
       }
-      if (sortVal && sortVal !== "terbaru") {
+      if (sortVal && sortVal !== "latest") {
         params.set("sort", sortVal);
+      }
+      if (page > 1) {
+        params.set("page", String(page));
       }
       const queryString = params.toString();
       const targetUrl = queryString ? `${pathname}?${queryString}` : pathname;
@@ -87,78 +141,67 @@ export default function KoleksiContent() {
   // Category filter selection handler
   const handleSelectCategory = (catSlug: string) => {
     setActiveCategory(catSlug);
-    updateUrlImmediately(catSlug, searchQuery, sortBy);
+    setCurrentPage(1);
+    updateUrl(catSlug, searchQuery, sortBy, 1);
   };
 
-  // Search input change handler
+  // Search submit handler
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCurrentPage(1);
+    updateUrl(activeCategory, searchQuery, sortBy, 1);
+  };
+
+  // Search input change handler (debounced URL update)
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
   };
 
+  // Debounced URL sync for search typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentUrlSearch = searchParams.get("search") || "";
+      if (searchQuery.trim() !== currentUrlSearch.trim()) {
+        setCurrentPage(1);
+        updateUrl(activeCategory, searchQuery, sortBy, 1);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeCategory, sortBy, searchParams, updateUrl]);
+
   // Clear search input
   const handleClearSearch = () => {
     setSearchQuery("");
-    updateUrlImmediately(activeCategory, "", sortBy);
+    setCurrentPage(1);
+    updateUrl(activeCategory, "", sortBy, 1);
   };
 
   // Sort dropdown change handler
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value as SortOption;
     setSortBy(val);
-    updateUrlImmediately(activeCategory, searchQuery, val);
+    setCurrentPage(1);
+    updateUrl(activeCategory, searchQuery, val, 1);
   };
 
   // Reset all filters to default
   const handleResetFilters = () => {
     setActiveCategory("semua");
     setSearchQuery("");
-    setSortBy("terbaru");
+    setSortBy("latest");
+    setCurrentPage(1);
     router.replace(pathname, { scroll: false });
   };
 
-  // Combined Filtering + Sorting logic
-  const filteredProducts = useMemo(() => {
-    return mockProducts
-      .filter((product) => {
-        // 1. Category Filter
-        const matchesCategory =
-          activeCategory === "semua" || product.category === activeCategory;
-
-        // 2. Search Query Filter (name, categoryLabel, category slug, shortDescription, materialDetails, variants)
-        const query = searchQuery.toLowerCase().trim();
-        const matchesSearch =
-          !query ||
-          product.name.toLowerCase().includes(query) ||
-          product.category.toLowerCase().includes(query) ||
-          product.categoryLabel.toLowerCase().includes(query) ||
-          product.shortDescription.toLowerCase().includes(query) ||
-          (product.materialDetails &&
-            product.materialDetails.toLowerCase().includes(query)) ||
-          (product.variants &&
-            product.variants.some((v) =>
-              v.options.some((opt) => opt.toLowerCase().includes(query))
-            ));
-
-        return matchesCategory && matchesSearch;
-      })
-      .sort((a, b) => {
-        // 3. Sorting
-        switch (sortBy) {
-          case "nama-asc":
-            return a.name.localeCompare(b.name, "id");
-          case "harga-asc":
-            return a.price - b.price;
-          case "harga-desc":
-            return b.price - a.price;
-          case "terbaru":
-          default:
-            return 0; // Preserves original catalog ordering
-        }
-      });
-  }, [activeCategory, searchQuery, sortBy]);
+  // Pagination handler
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    updateUrl(activeCategory, searchQuery, sortBy, page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const isFilterActive =
-    activeCategory !== "semua" || searchQuery.trim() !== "" || sortBy !== "terbaru";
+    activeCategory !== "semua" || searchQuery.trim() !== "" || sortBy !== "latest";
 
   return (
     <div className="w-full">
@@ -187,7 +230,7 @@ export default function KoleksiContent() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             
             {/* Search Input Box */}
-            <div className="relative flex-1 max-w-lg">
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-lg">
               <label htmlFor="product-search" className="sr-only">
                 Cari material atau perlengkapan craft
               </label>
@@ -212,7 +255,7 @@ export default function KoleksiContent() {
                   <X className="w-4 h-4" />
                 </button>
               )}
-            </div>
+            </form>
 
             {/* Sort Selector Dropdown */}
             <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
@@ -231,10 +274,12 @@ export default function KoleksiContent() {
                   aria-label="Urutkan produk"
                   className="appearance-none bg-brand-warm border border-border text-foreground text-xs sm:text-sm font-semibold rounded-full pl-3.5 pr-8 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink cursor-pointer transition-all"
                 >
-                  <option value="terbaru">Terbaru</option>
-                  <option value="nama-asc">Nama A–Z</option>
-                  <option value="harga-asc">Harga Terendah</option>
-                  <option value="harga-desc">Harga Tertinggi</option>
+                  <option value="latest">Terbaru</option>
+                  <option value="oldest">Terlama</option>
+                  <option value="name_asc">Nama A–Z</option>
+                  <option value="name_desc">Nama Z–A</option>
+                  <option value="price_asc">Harga Terendah</option>
+                  <option value="price_desc">Harga Tertinggi</option>
                 </select>
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">
                   ▼
@@ -266,26 +311,30 @@ export default function KoleksiContent() {
                 Semua
               </button>
 
-              {/* 5 Craft Categories */}
-              {craftCategories.map((cat) => {
-                const isSelected = activeCategory === cat.slug;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isSelected}
-                    onClick={() => handleSelectCategory(cat.slug)}
-                    className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                      isSelected
-                        ? "bg-brand-pink text-white shadow-none"
-                        : "bg-brand-warm text-muted-foreground hover:text-foreground hover:bg-brand-pink-soft/30 hover:border-brand-pink/30 border border-border/80"
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                );
-              })}
+              {/* Dynamic Categories from API */}
+              {isCategoriesLoading ? (
+                <span className="text-xs text-muted-foreground px-2">Memuat...</span>
+              ) : (
+                categories.map((cat) => {
+                  const isSelected = activeCategory === cat.slug;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      onClick={() => handleSelectCategory(cat.slug)}
+                      className={`shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                        isSelected
+                          ? "bg-brand-pink text-white shadow-none"
+                          : "bg-brand-warm text-muted-foreground hover:text-foreground hover:bg-brand-pink-soft/30 hover:border-brand-pink/30 border border-border/80"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -299,14 +348,15 @@ export default function KoleksiContent() {
           {/* Status Header: Product Count & Reset Action */}
           <div className="flex items-center justify-between gap-4 mb-6 sm:mb-8 text-xs sm:text-sm text-muted-foreground">
             <div>
-              {isFilterActive ? (
+              {pagination ? (
                 <span>
-                  Menampilkan <strong className="text-foreground font-semibold">{filteredProducts.length}</strong> dari {mockProducts.length} produk
+                  Menampilkan <strong className="text-foreground font-semibold">{products.length}</strong> dari {pagination.total} produk
+                  {pagination.last_page > 1 && (
+                    <span> · Halaman {pagination.current_page} dari {pagination.last_page}</span>
+                  )}
                 </span>
               ) : (
-                <span>
-                  Menampilkan <strong className="text-foreground font-semibold">{mockProducts.length}</strong> produk
-                </span>
+                <span>&nbsp;</span>
               )}
             </div>
 
@@ -323,15 +373,55 @@ export default function KoleksiContent() {
             )}
           </div>
 
-          {/* 4. Product Grid or Empty State */}
-          {filteredProducts.length > 0 ? (
+          {/* Loading State */}
+          {isLoading && (
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-6">
-              {filteredProducts.map((product, index) => (
-                <ProductCard key={product.id} product={product} index={index} />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-2xl bg-brand-warm border border-border p-3 sm:p-4">
+                  <div className="aspect-square rounded-xl bg-border/40 mb-3" />
+                  <div className="h-3 bg-border/40 rounded-full w-1/3 mb-2" />
+                  <div className="h-4 bg-border/40 rounded-full w-3/4 mb-3" />
+                  <div className="h-3 bg-border/40 rounded-full w-1/2" />
+                </div>
               ))}
             </div>
-          ) : (
-            /* 5. Clean Empty State */
+          )}
+
+          {/* Error State */}
+          {!isLoading && error && (
+            <div className="rounded-3xl bg-brand-warm border border-border p-10 sm:p-14 text-center max-w-lg mx-auto my-8">
+              <h2 className="font-sans text-xl sm:text-2xl font-bold text-foreground mb-2">
+                Gagal Memuat Produk
+              </h2>
+              <p className="font-sans text-sm text-muted-foreground leading-relaxed mb-6">
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setCurrentPage(1);
+                  updateUrl(activeCategory, searchQuery, sortBy, 1);
+                }}
+                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-brand-pink text-white font-semibold text-xs sm:text-sm hover:bg-brand-pink-dark active:scale-95 transition-all shadow-none"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Coba Lagi</span>
+              </button>
+            </div>
+          )}
+
+          {/* 4. Product Grid or Empty State */}
+          {!isLoading && !error && products.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-6">
+              {products.map((product, index) => (
+                <ProductCard key={product.id} apiProduct={product} index={index} />
+              ))}
+            </div>
+          )}
+
+          {/* 5. Empty State */}
+          {!isLoading && !error && products.length === 0 && (
             <div className="rounded-3xl bg-brand-warm border border-border p-10 sm:p-14 text-center max-w-lg mx-auto my-8">
               <h2 className="font-sans text-xl sm:text-2xl font-bold text-foreground mb-2">
                 Produk tidak ditemukan
@@ -346,6 +436,55 @@ export default function KoleksiContent() {
               >
                 <RotateCcw className="w-4 h-4" />
                 <span>Reset Filter</span>
+              </button>
+            </div>
+          )}
+
+          {/* 6. Pagination */}
+          {!isLoading && !error && pagination && pagination.last_page > 1 && (
+            <div className="mt-10 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.current_page - 1)}
+                disabled={pagination.current_page <= 1}
+                className="px-4 py-2 rounded-full border border-border text-xs font-semibold text-foreground hover:border-brand-pink/40 hover:bg-brand-pink-soft/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                ← Sebelumnya
+              </button>
+              
+              {Array.from({ length: pagination.last_page }, (_, i) => i + 1)
+                .filter((page) => {
+                  // Show first, last, and pages near current
+                  const current = pagination.current_page;
+                  return page === 1 || page === pagination.last_page || Math.abs(page - current) <= 1;
+                })
+                .map((page, idx, arr) => (
+                  <React.Fragment key={page}>
+                    {/* Show ellipsis if there's a gap */}
+                    {idx > 0 && page - arr[idx - 1] > 1 && (
+                      <span className="text-xs text-muted-foreground px-1">…</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handlePageChange(page)}
+                      className={`w-9 h-9 rounded-full text-xs font-semibold transition-all ${
+                        page === pagination.current_page
+                          ? "bg-brand-pink text-white"
+                          : "border border-border text-foreground hover:border-brand-pink/40 hover:bg-brand-pink-soft/20"
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  </React.Fragment>
+                ))}
+
+              <button
+                type="button"
+                onClick={() => handlePageChange(pagination.current_page + 1)}
+                disabled={pagination.current_page >= pagination.last_page}
+                className="px-4 py-2 rounded-full border border-border text-xs font-semibold text-foreground hover:border-brand-pink/40 hover:bg-brand-pink-soft/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Selanjutnya →
               </button>
             </div>
           )}

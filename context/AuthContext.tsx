@@ -8,17 +8,32 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import {
+  TOKEN_STORAGE_KEY,
+  loginCustomer,
+  registerCustomer,
+  logoutCustomer,
+  getCurrentCustomer,
+  updateCustomerProfile,
+  getCustomerAddresses,
+  createCustomerAddress,
+  updateCustomerAddress,
+  deleteCustomerAddress,
+  setDefaultCustomerAddress,
+} from "@/lib/api/ecommerce";
+import type { ApiCustomer, ApiCustomerAddress } from "@/lib/api/types";
 
 export interface CustomerProfile {
   id: string;
-  nama: string;
-  whatsapp: string;
+  nama: string; // Alias for name (backward compatibility)
+  name: string; // Backend user name
   email: string;
+  whatsapp: string;
 }
 
 export interface CustomerAddress {
   id: string;
-  label: string; // e.g., "Rumah", "Kantor", "Kos"
+  label: string;
   nama: string;
   whatsapp: string;
   alamat: string;
@@ -29,346 +44,443 @@ export interface CustomerAddress {
   isDefault: boolean;
 }
 
-interface RegisterData {
-  nama: string;
-  whatsapp: string;
+export interface RegisterData {
+  nama?: string;
+  name?: string;
+  whatsapp?: string;
   email: string;
-  password?: string;
+  password: string;
+  password_confirmation?: string;
+  confirmPassword?: string;
 }
 
 interface AuthContextType {
-  customer: CustomerProfile | null;
-  addresses: CustomerAddress[];
-  isLoggedIn: boolean;
-  isHydrated: boolean;
+  user: CustomerProfile | null;
+  customer: CustomerProfile | null; // Backward compatibility alias for user
+  isAuthenticated: boolean;
+  isLoggedIn: boolean; // Backward compatibility alias for isAuthenticated
+  isLoading: boolean;
+  isHydrated: boolean; // Backward compatibility alias for !isLoading
   login: (
-    identifier: string,
+    identifierOrEmail: string,
     password?: string
-  ) => { success: boolean; error?: string };
-  register: (data: RegisterData) => { success: boolean; error?: string };
-  logout: () => void;
-  updateProfile: (data: Partial<Omit<CustomerProfile, "id">>) => void;
-  addAddress: (
-    address: Omit<CustomerAddress, "id">
-  ) => CustomerAddress;
+  ) => Promise<{ success: boolean; error?: string }>;
+  register: (
+    data: RegisterData
+  ) => Promise<{ success: boolean; error?: string; errors?: Record<string, string[]> }>;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  updateProfile: (
+    data: Partial<Omit<CustomerProfile, "id">>
+  ) => Promise<{ success: boolean; error?: string }>;
+
+  addresses: CustomerAddress[];
+  isAddressesLoading: boolean;
+  addressError: string | null;
+  refreshAddresses: () => Promise<void>;
+  addAddress: (address: Omit<CustomerAddress, "id">) => Promise<CustomerAddress>;
   updateAddress: (
     id: string,
     address: Partial<Omit<CustomerAddress, "id">>
-  ) => void;
-  deleteAddress: (id: string) => void;
-  setDefaultAddress: (id: string) => void;
+  ) => Promise<CustomerAddress>;
+  deleteAddress: (id: string) => Promise<void>;
+  setDefaultAddress: (id: string) => Promise<void>;
   defaultAddress: CustomerAddress | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const CUSTOMER_STORAGE_KEY = "krezoema-customer";
-const ADDRESSES_STORAGE_KEY = "krezoema-addresses";
+const LEGACY_ADDRESSES_STORAGE_KEY = "krezoema-addresses";
 
-// Seed sample addresses for realistic customer experience
-const INITIAL_MOCK_ADDRESSES: CustomerAddress[] = [
-  {
-    id: "addr-1",
-    label: "Rumah",
-    nama: "Amrizal",
-    whatsapp: "081234567890",
-    alamat: "Jl. Mawar No. 14, RT 02 / RW 03",
-    kecamatan: "Taman",
-    kotaKabupaten: "Kota Madiun",
-    provinsi: "Jawa Timur",
-    kodePos: "63131",
-    isDefault: true,
-  },
-  {
-    id: "addr-2",
-    label: "Studio Craft",
-    nama: "Amrizal (Studio)",
-    whatsapp: "081234567890",
-    alamat: "Jl. Pahlawan Kreatif No. 8B",
-    kecamatan: "Kartoharjo",
-    kotaKabupaten: "Kota Madiun",
-    provinsi: "Jawa Timur",
-    kodePos: "63115",
-    isDefault: false,
-  },
-];
+function mapApiAddress(address: ApiCustomerAddress): CustomerAddress {
+  return {
+    id: String(address.id),
+    label: address.label,
+    nama: address.recipient_name,
+    whatsapp: address.whatsapp,
+    alamat: address.address,
+    kecamatan: address.district,
+    kotaKabupaten: address.city,
+    provinsi: address.province,
+    kodePos: address.postal_code,
+    isDefault: address.is_default,
+  };
+}
+
+function mapAddressPayload(address: Omit<CustomerAddress, "id">) {
+  return {
+    label: address.label.trim(),
+    recipient_name: address.nama.trim(),
+    whatsapp: address.whatsapp.trim(),
+    address: address.alamat.trim(),
+    district: address.kecamatan.trim(),
+    city: address.kotaKabupaten.trim(),
+    province: address.provinsi.trim(),
+    postal_code: address.kodePos.trim(),
+    is_default: address.isDefault,
+  };
+}
+
+function mapApiCustomerToProfile(
+  apiCustomer: ApiCustomer,
+  whatsappFallback: string = "081234567890"
+): CustomerProfile {
+  return {
+    id: String(apiCustomer.id),
+    name: apiCustomer.name,
+    nama: apiCustomer.name,
+    email: apiCustomer.email,
+    whatsapp: whatsappFallback,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [customer, setCustomer] = useState<CustomerProfile | null>(null);
+  const [user, setUser] = useState<CustomerProfile | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
-  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+  const [isAddressesLoading, setIsAddressesLoading] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
 
-  // Hydrate customer & addresses from localStorage on mount
-  useEffect(() => {
+  const refreshAddresses = useCallback(async () => {
+    setIsAddressesLoading(true);
+    setAddressError(null);
     try {
-      const storedCustomer = window.localStorage.getItem(CUSTOMER_STORAGE_KEY);
-      if (storedCustomer) {
-        const parsedCustomer = JSON.parse(storedCustomer);
-        if (parsedCustomer && parsedCustomer.nama) {
-          setCustomer(parsedCustomer);
-        }
+      const fetched = await getCustomerAddresses();
+      setAddresses(fetched.map(mapApiAddress));
+    } catch (error: any) {
+      setAddresses([]);
+      if (error?.response?.status === 401) {
+        if (typeof window !== "undefined") localStorage.removeItem(TOKEN_STORAGE_KEY);
+        setUser(null);
+        setAddressError("Sesi Anda telah berakhir. Silakan masuk kembali.");
+      } else {
+        setAddressError("Gagal memuat alamat. Silakan coba lagi.");
       }
-
-      const storedAddresses = window.localStorage.getItem(ADDRESSES_STORAGE_KEY);
-      if (storedAddresses) {
-        const parsedAddresses = JSON.parse(storedAddresses);
-        if (Array.isArray(parsedAddresses)) {
-          setAddresses(parsedAddresses);
-        }
-      }
-    } catch (err) {
-      console.error("Gagal membaca auth dari localStorage:", err);
+      throw error;
     } finally {
-      setIsHydrated(true);
+      setIsAddressesLoading(false);
     }
   }, []);
 
-  // Persist customer to localStorage
+  // 1. Session Restoration on App Start (from Laravel Sanctum via /me)
   useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      if (customer) {
-        window.localStorage.setItem(
-          CUSTOMER_STORAGE_KEY,
-          JSON.stringify(customer)
-        );
-      } else {
-        window.localStorage.removeItem(CUSTOMER_STORAGE_KEY);
-      }
-    } catch (err) {
-      console.error("Gagal menyimpan customer ke localStorage:", err);
-    }
-  }, [customer, isHydrated]);
+    let cancelled = false;
 
-  // Persist addresses to localStorage
-  useEffect(() => {
-    if (!isHydrated) return;
-    try {
-      window.localStorage.setItem(
-        ADDRESSES_STORAGE_KEY,
-        JSON.stringify(addresses)
-      );
-    } catch (err) {
-      console.error("Gagal menyimpan addresses ke localStorage:", err);
+    async function restoreSession() {
+      setIsLoading(true);
+
+      try {
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem(TOKEN_STORAGE_KEY)
+            : null;
+
+        if (token) {
+          const customerData = await getCurrentCustomer();
+          if (!cancelled) {
+            setUser(mapApiCustomerToProfile(customerData));
+            setIsAddressesLoading(true);
+            try {
+              const fetched = await getCustomerAddresses();
+              if (!cancelled) setAddresses(fetched.map(mapApiAddress));
+            } catch (error: any) {
+              if (!cancelled) {
+                if (error?.response?.status === 401) {
+                  if (typeof window !== "undefined") localStorage.removeItem(TOKEN_STORAGE_KEY);
+                  setUser(null);
+                  setAddresses([]);
+                  setAddressError("Sesi Anda telah berakhir. Silakan masuk kembali.");
+                } else {
+                  setAddressError("Gagal memuat alamat. Silakan coba lagi.");
+                }
+              }
+            } finally {
+              if (!cancelled) setIsAddressesLoading(false);
+            }
+          }
+        } else {
+          if (!cancelled) {
+            setUser(null);
+          }
+        }
+      } catch {
+        // Token is invalid, expired, or backend unreachable
+        if (!cancelled) {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+          }
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     }
-  }, [addresses, isHydrated]);
+
+    restoreSession();
+
+    // Address data is now owned by the API. Remove the old local mock cache.
+    try { window.localStorage.removeItem(LEGACY_ADDRESSES_STORAGE_KEY); } catch { /* ignore */ }
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /**
-   * Mock login function: accepts email or WhatsApp number
+   * Real Login with Laravel backend.
    */
   const login = useCallback(
-    (identifier: string, _password?: string) => {
-      const trimmed = identifier.trim();
-      if (!trimmed) {
-        return {
-          success: false,
-          error: "Nomor WhatsApp atau email wajib diisi.",
-        };
-      }
+    async (
+      identifierOrEmail: string,
+      password?: string
+    ): Promise<{ success: boolean; error?: string }> => {
+      const email = identifierOrEmail.trim();
+      const pwd = password || "";
 
-      // Check if we already have saved customer matching identifier
-      let profile: CustomerProfile;
-      const isEmail = trimmed.includes("@");
-
-      if (
-        customer &&
-        (customer.email.toLowerCase() === trimmed.toLowerCase() ||
-          customer.whatsapp === trimmed)
-      ) {
-        profile = customer;
-      } else {
-        // Create mock logged-in customer based on the identifier
-        const defaultName = isEmail
-          ? trimmed.split("@")[0].replace(/[._-]/g, " ")
-          : "Amrizal";
-        const formattedName =
-          defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
-
-        profile = {
-          id: `cust-${Date.now()}`,
-          nama: formattedName,
-          whatsapp: isEmail ? "081234567890" : trimmed,
-          email: isEmail ? trimmed : `${trimmed}@example.com`,
-        };
-      }
-
-      setCustomer(profile);
-
-      // If addresses list is currently empty, seed with initial mock addresses
-      setAddresses((prev) => {
-        if (prev.length === 0) {
-          const seeded = INITIAL_MOCK_ADDRESSES.map((addr, idx) => ({
-            ...addr,
-            nama: profile.nama,
-            whatsapp: profile.whatsapp,
-            isDefault: idx === 0,
-          }));
-          return seeded;
-        }
-        return prev;
-      });
-
-      return { success: true };
-    },
-    [customer]
-  );
-
-  /**
-   * Mock register function
-   */
-  const register = useCallback(
-    (data: RegisterData) => {
-      if (!data.nama.trim()) {
-        return { success: false, error: "Nama lengkap wajib diisi." };
-      }
-      if (!data.whatsapp.trim()) {
-        return { success: false, error: "Nomor WhatsApp wajib diisi." };
-      }
-      if (!data.email.trim()) {
+      if (!email) {
         return { success: false, error: "Email wajib diisi." };
       }
+      if (!pwd) {
+        return { success: false, error: "Password wajib diisi." };
+      }
 
-      const newCustomer: CustomerProfile = {
-        id: `cust-${Date.now()}`,
-        nama: data.nama.trim(),
-        whatsapp: data.whatsapp.trim(),
-        email: data.email.trim(),
-      };
-
-      setCustomer(newCustomer);
-
-      // If no addresses yet, seed an initial default address with the customer's info
-      setAddresses((prev) => {
-        if (prev.length === 0) {
-          return [
-            {
-              id: `addr-${Date.now()}`,
-              label: "Rumah",
-              nama: newCustomer.nama,
-              whatsapp: newCustomer.whatsapp,
-              alamat: "Jl. Mawar No. 14, RT 02 / RW 03",
-              kecamatan: "Taman",
-              kotaKabupaten: "Kota Madiun",
-              provinsi: "Jawa Timur",
-              kodePos: "63131",
-              isDefault: true,
-            },
-          ];
+      try {
+        const res = await loginCustomer({ email, password: pwd });
+        const customerObj = res.data || res.customer;
+        if (!res.token || !customerObj) {
+          return { success: false, error: "Email atau password salah." };
         }
-        return prev;
-      });
 
-      return { success: true };
-    },
-    []
-  );
+        if (typeof window !== "undefined" && res.token) {
+          localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
+        }
 
-  /**
-   * Logout function
-   */
-  const logout = useCallback(() => {
-    setCustomer(null);
-  }, []);
+        const profile = mapApiCustomerToProfile(customerObj);
+        setUser(profile);
+        void refreshAddresses().catch(() => undefined);
+        return { success: true };
+      } catch (err: any) {
+        const status = err.response?.status;
+        const data = err.response?.data;
 
-  /**
-   * Update customer profile
-   */
-  const updateProfile = useCallback(
-    (data: Partial<Omit<CustomerProfile, "id">>) => {
-      setCustomer((prev) => (prev ? { ...prev, ...data } : null));
-    },
-    []
-  );
+        if (
+          status === 401 ||
+          data?.message === "Invalid email or password" ||
+          err.message === "Invalid email or password" ||
+          err.message === "Email atau password salah."
+        ) {
+          return {
+            success: false,
+            error: "Email atau password salah.",
+          };
+        }
 
-  /**
-   * Add a new shipping address
-   */
-  const addAddress = useCallback(
-    (newAddrData: Omit<CustomerAddress, "id">): CustomerAddress => {
-      const newId = `addr-${Date.now()}`;
-      let createdAddress: CustomerAddress;
+        if (data?.errors) {
+          const firstErrKey = Object.keys(data.errors)[0];
+          const firstErrMsg = data.errors[firstErrKey]?.[0];
+          return {
+            success: false,
+            error: firstErrMsg || "Data yang dimasukkan tidak valid.",
+          };
+        }
 
-      setAddresses((prev) => {
-        const willBeDefault = newAddrData.isDefault || prev.length === 0;
-
-        createdAddress = {
-          ...newAddrData,
-          id: newId,
-          isDefault: willBeDefault,
+        return {
+          success: false,
+          error: "Email atau password salah.",
         };
-
-        if (willBeDefault) {
-          return [
-            createdAddress,
-            ...prev.map((a) => ({ ...a, isDefault: false })),
-          ];
-        }
-
-        return [...prev, createdAddress];
-      });
-
-      return {
-        ...newAddrData,
-        id: newId,
-        isDefault: newAddrData.isDefault || addresses.length === 0,
-      };
+      }
     },
-    [addresses.length]
+    []
   );
 
   /**
-   * Update an existing address
+   * Real Register with Laravel backend.
    */
-  const updateAddress = useCallback(
-    (id: string, updatedFields: Partial<Omit<CustomerAddress, "id">>) => {
-      setAddresses((prev) => {
-        const isSettingDefault = updatedFields.isDefault === true;
+  const register = useCallback(
+    async (
+      data: RegisterData
+    ): Promise<{ success: boolean; error?: string; errors?: Record<string, string[]> }> => {
+      const name = (data.name || data.nama || "").trim();
+      const email = data.email.trim();
+      const password = data.password;
+      const password_confirmation =
+        data.password_confirmation || data.confirmPassword || "";
 
-        return prev.map((addr) => {
-          if (addr.id === id) {
+      if (!name) {
+        return { success: false, error: "Nama lengkap wajib diisi." };
+      }
+      if (!email) {
+        return { success: false, error: "Email wajib diisi." };
+      }
+      if (!password || password.length < 8) {
+        return { success: false, error: "Password minimal 8 karakter." };
+      }
+      if (password !== password_confirmation) {
+        return { success: false, error: "Konfirmasi password tidak cocok." };
+      }
+
+      try {
+        const res = await registerCustomer({
+          name,
+          email,
+          password,
+          password_confirmation,
+        });
+
+        const customerObj = res.data || res.customer;
+        if (!res.token || !customerObj) {
+          return { success: false, error: "Gagal membuat akun. Silakan coba lagi." };
+        }
+
+        if (typeof window !== "undefined" && res.token) {
+          localStorage.setItem(TOKEN_STORAGE_KEY, res.token);
+        }
+
+        const profile = mapApiCustomerToProfile(
+          customerObj,
+          data.whatsapp || "081234567890"
+        );
+        setUser(profile);
+        void refreshAddresses().catch(() => undefined);
+        return { success: true };
+      } catch (err: any) {
+        const status = err.response?.status;
+        const responseData = err.response?.data;
+
+        if (responseData?.errors) {
+          const errors = responseData.errors;
+          if (errors.email) {
             return {
-              ...addr,
-              ...updatedFields,
-              isDefault: isSettingDefault ? true : addr.isDefault,
+              success: false,
+              error: "Email ini sudah terdaftar. Silakan gunakan email lain atau masuk.",
+              errors,
             };
           }
-          if (isSettingDefault) {
-            return { ...addr, isDefault: false };
-          }
-          return addr;
-        });
-      });
+          const firstKey = Object.keys(errors)[0];
+          return {
+            success: false,
+            error: errors[firstKey]?.[0] || "Data pendaftaran tidak valid.",
+            errors,
+          };
+        }
+
+        return {
+          success: false,
+          error: "Terjadi kesalahan saat mendaftar. Silakan coba lagi.",
+        };
+      }
     },
     []
   );
 
   /**
-   * Delete an address
+   * Real Logout: revokes token on Laravel backend and clears local auth.
    */
-  const deleteAddress = useCallback((id: string) => {
-    setAddresses((prev) => {
-      const filtered = prev.filter((a) => a.id !== id);
-      // If the deleted address was the default and there are remaining addresses,
-      // make the first remaining address the default
-      const wasDefault = prev.find((a) => a.id === id)?.isDefault;
-      if (wasDefault && filtered.length > 0) {
-        filtered[0] = { ...filtered[0], isDefault: true };
+  const logout = useCallback(async () => {
+    try {
+      await logoutCustomer();
+    } catch {
+      // Silently proceed so user is always logged out locally
+    } finally {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
       }
-      return filtered;
-    });
+      setUser(null);
+      setAddresses([]);
+      setAddressError(null);
+    }
   }, []);
 
   /**
-   * Set an address as default
+   * Refresh current user from Laravel backend.
    */
-  const setDefaultAddress = useCallback((id: string) => {
-    setAddresses((prev) =>
-      prev.map((addr) => ({
-        ...addr,
-        isDefault: addr.id === id,
-      }))
-    );
+  const refreshUser = useCallback(async () => {
+    try {
+      const customerData = await getCurrentCustomer();
+      setUser((prev) =>
+        mapApiCustomerToProfile(customerData, prev?.whatsapp || "081234567890")
+      );
+    } catch {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+      }
+      setUser(null);
+      setAddresses([]);
+    }
   }, []);
+
+  /**
+   * Real Update Profile with Laravel backend.
+   */
+  const updateProfile = useCallback(
+    async (
+      data: Partial<Omit<CustomerProfile, "id">>
+    ): Promise<{ success: boolean; error?: string }> => {
+      const payload: { name?: string; email?: string } = {};
+      const newName = data.name || data.nama;
+      if (newName) payload.name = newName.trim();
+      if (data.email) payload.email = data.email.trim();
+
+      try {
+        const updated = await updateCustomerProfile(payload);
+        const profile = mapApiCustomerToProfile(
+          updated,
+          data.whatsapp || user?.whatsapp || "081234567890"
+        );
+        setUser(profile);
+        return { success: true };
+      } catch (err: any) {
+        const status = err.response?.status;
+        const errData = err.response?.data;
+
+        if (status === 422 && errData?.errors) {
+          const firstKey = Object.keys(errData.errors)[0];
+          return {
+            success: false,
+            error: errData.errors[firstKey]?.[0] || "Data tidak valid.",
+          };
+        }
+
+        return {
+          success: false,
+          error: "Gagal memperbarui profil. Silakan coba lagi.",
+        };
+      }
+    },
+    [user?.whatsapp]
+  );
+
+  const addAddress = useCallback(
+    async (newAddrData: Omit<CustomerAddress, "id">): Promise<CustomerAddress> => {
+      const created = await createCustomerAddress(mapAddressPayload(newAddrData));
+      await refreshAddresses();
+      return mapApiAddress(created);
+    },
+    [refreshAddresses]
+  );
+
+  const updateAddress = useCallback(
+    async (id: string, updatedFields: Partial<Omit<CustomerAddress, "id">>) => {
+      const current = addresses.find((address) => address.id === id);
+      if (!current) throw new Error("Alamat tidak ditemukan.");
+      const updated = await updateCustomerAddress(id, mapAddressPayload({ ...current, ...updatedFields }));
+      await refreshAddresses();
+      return mapApiAddress(updated);
+    },
+    [addresses, refreshAddresses]
+  );
+
+  const deleteAddress = useCallback(async (id: string) => {
+    await deleteCustomerAddress(id);
+    await refreshAddresses();
+  }, [refreshAddresses]);
+
+  const setDefaultAddress = useCallback(async (id: string) => {
+    await setDefaultCustomerAddress(id);
+    await refreshAddresses();
+  }, [refreshAddresses]);
 
   const defaultAddress = useMemo(() => {
     return addresses.find((a) => a.isDefault) || addresses[0] || null;
@@ -376,14 +488,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      customer,
-      addresses,
-      isLoggedIn: !!customer,
-      isHydrated,
+      user,
+      customer: user,
+      isAuthenticated: !!user,
+      isLoggedIn: !!user,
+      isLoading,
+      isHydrated: !isLoading,
       login,
       register,
       logout,
+      refreshUser,
       updateProfile,
+      addresses,
+      isAddressesLoading,
+      addressError,
+      refreshAddresses,
       addAddress,
       updateAddress,
       deleteAddress,
@@ -391,13 +510,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       defaultAddress,
     }),
     [
-      customer,
-      addresses,
-      isHydrated,
+      user,
+      isLoading,
       login,
       register,
       logout,
+      refreshUser,
       updateProfile,
+      addresses,
+      isAddressesLoading,
+      addressError,
+      refreshAddresses,
       addAddress,
       updateAddress,
       deleteAddress,

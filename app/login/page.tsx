@@ -7,35 +7,36 @@ import Navbar from "@/components/krezoema/Navbar";
 import Footer from "@/components/krezoema/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { getSafeRedirectUrl } from "@/lib/api/helpers";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectParam = searchParams.get("redirect");
-  const redirectTarget = redirectParam || "/akun";
+  const redirectTarget = getSafeRedirectUrl(redirectParam, "/akun");
 
-  const { login, isLoggedIn, isHydrated } = useAuth();
-  const [identifier, setIdentifier] = useState("");
+  const { login, isLoggedIn, isHydrated, isLoading } = useAuth();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [forgotNotice, setForgotNotice] = useState(false);
 
   // If already logged in, redirect immediately to target
   React.useEffect(() => {
-    if (isHydrated && isLoggedIn) {
+    if (isHydrated && !isLoading && isLoggedIn) {
       router.replace(redirectTarget);
     }
-  }, [isHydrated, isLoggedIn, redirectTarget, router]);
+  }, [isHydrated, isLoading, isLoggedIn, redirectTarget, router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setForgotNotice(false);
 
-    if (!identifier.trim()) {
-      setError("Nomor WhatsApp atau email wajib diisi.");
+    if (!email.trim()) {
+      setError("Email wajib diisi.");
       return;
     }
 
@@ -44,18 +45,20 @@ function LoginForm() {
       return;
     }
 
-    setLoading(true);
+    setSubmitting(true);
 
-    setTimeout(() => {
-      const res = login(identifier, password);
-      setLoading(false);
-
+    try {
+      const res = await login(email, password);
       if (res.success) {
         router.push(redirectTarget);
       } else {
-        setError(res.error || "Gagal masuk. Periksa kembali data Anda.");
+        setError(res.error || "Email atau password salah.");
       }
-    }, 400);
+    } catch {
+      setError("Terjadi kesalahan. Silakan coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -87,7 +90,7 @@ function LoginForm() {
           <div className="mb-5 p-3.5 rounded-xl bg-brand-pink-soft/50 border border-brand-pink/30 text-brand-pink-dark text-xs font-medium flex items-start gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              Untuk reset kata sandi, silakan kirim pesan ke WhatsApp KREZOEMA dengan menyertakan email/nomor Anda.
+              Untuk reset kata sandi, silakan hubungi tim KREZOEMA melalui WhatsApp dengan menyertakan email Anda.
             </span>
           </div>
         )}
@@ -95,20 +98,22 @@ function LoginForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
-              htmlFor="identifier"
+              htmlFor="email"
               className="block text-xs sm:text-sm font-semibold text-foreground mb-1.5"
             >
-              Nomor WhatsApp / Email
+              Alamat Email
             </label>
             <div className="relative">
               <input
-                id="identifier"
-                type="text"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="Contoh: 08123456789 atau nama@email.com"
-                autoComplete="username"
-                className="w-full px-4 py-2.5 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink transition-all"
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nama@email.com"
+                autoComplete="email"
+                required
+                disabled={submitting}
+                className="w-full px-4 py-2.5 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -137,7 +142,9 @@ function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Masukkan kata sandi"
                 autoComplete="current-password"
-                className="w-full px-4 py-2.5 pr-10 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink transition-all"
+                required
+                disabled={submitting}
+                className="w-full px-4 py-2.5 pr-10 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
@@ -152,11 +159,11 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={submitting}
             className="w-full h-11 sm:h-12 mt-2 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark active:scale-[0.99] transition-all shadow-none flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {loading ? (
-              <span>Memproses...</span>
+            {submitting ? (
+              <span>Masuk...</span>
             ) : (
               <>
                 <span>Masuk</span>

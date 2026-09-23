@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { cartItemCount, isHydrated: isCartHydrated } = useCart();
   const { customer, isLoggedIn, logout, isHydrated: isAuthHydrated } = useAuth();
 
@@ -39,7 +40,23 @@ export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      setAccountMenuOpen(false);
+      setMobileMenuOpen(false);
+      if (pathname === "/akun") {
+        router.push("/login");
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   // Subtle scroll elevation
   useEffect(() => {
@@ -211,14 +228,12 @@ export default function Navbar() {
 
                           <button
                             type="button"
-                            onClick={() => {
-                              logout();
-                              setAccountMenuOpen(false);
-                            }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors text-left"
+                            disabled={isLoggingOut}
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors text-left disabled:opacity-60 disabled:cursor-not-allowed"
                           >
                             <LogOut className="w-4 h-4" />
-                            <span>Keluar</span>
+                            <span>{isLoggingOut ? "Keluar..." : "Keluar"}</span>
                           </button>
                         </motion.div>
                       )}
@@ -339,14 +354,12 @@ export default function Navbar() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => {
-                        logout();
-                        setMobileMenuOpen(false);
-                      }}
-                      className="flex items-center gap-2.5 text-sm font-medium text-rose-600 py-1.5 text-left"
+                      disabled={isLoggingOut}
+                      onClick={handleLogout}
+                      className="flex items-center gap-2.5 text-sm font-medium text-rose-600 py-1.5 text-left disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <LogOut className="w-4 h-4" />
-                      <span>Keluar</span>
+                      <span>{isLoggingOut ? "Keluar..." : "Keluar"}</span>
                     </button>
                   </>
                 ) : (

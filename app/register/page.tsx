@@ -7,13 +7,15 @@ import Navbar from "@/components/krezoema/Navbar";
 import Footer from "@/components/krezoema/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowRight, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { getSafeRedirectUrl } from "@/lib/api/helpers";
 
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = searchParams.get("redirect") || "/akun";
+  const redirectParam = searchParams.get("redirect");
+  const redirectTarget = getSafeRedirectUrl(redirectParam, "/akun");
 
-  const { register } = useAuth();
+  const { register, isLoggedIn, isHydrated, isLoading } = useAuth();
   const [nama, setNama] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [email, setEmail] = useState("");
@@ -22,19 +24,20 @@ function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // If already logged in, redirect immediately to target
+  React.useEffect(() => {
+    if (isHydrated && !isLoading && isLoggedIn) {
+      router.replace(redirectTarget);
+    }
+  }, [isHydrated, isLoading, isLoggedIn, redirectTarget, router]);
 
   const validate = () => {
     const err: Record<string, string> = {};
 
     if (!nama.trim()) {
       err.nama = "Nama lengkap wajib diisi.";
-    }
-
-    if (!whatsapp.trim()) {
-      err.whatsapp = "Nomor WhatsApp wajib diisi.";
-    } else if (whatsapp.trim().length < 8) {
-      err.whatsapp = "Nomor WhatsApp minimal 8 digit.";
     }
 
     if (!email.trim()) {
@@ -45,8 +48,8 @@ function RegisterForm() {
 
     if (!password) {
       err.password = "Password wajib diisi.";
-    } else if (password.length < 6) {
-      err.password = "Password minimal 6 karakter.";
+    } else if (password.length < 8) {
+      err.password = "Password minimal 8 karakter.";
     }
 
     if (password !== confirmPassword) {
@@ -57,29 +60,40 @@ function RegisterForm() {
     return Object.keys(err).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validate()) return;
 
-    setLoading(true);
+    setSubmitting(true);
+    setErrors({});
 
-    setTimeout(() => {
-      const res = register({
-        nama,
-        whatsapp,
-        email,
+    try {
+      const res = await register({
+        name: nama.trim(),
+        email: email.trim(),
         password,
+        password_confirmation: confirmPassword,
+        whatsapp: whatsapp.trim() || undefined,
       });
-
-      setLoading(false);
 
       if (res.success) {
         router.push(redirectTarget);
       } else {
-        setErrors({ form: res.error || "Gagal membuat akun." });
+        const fieldErrors: Record<string, string> = {};
+        if (res.errors) {
+          if (res.errors.email) fieldErrors.email = res.errors.email[0];
+          if (res.errors.password) fieldErrors.password = res.errors.password[0];
+          if (res.errors.name) fieldErrors.nama = res.errors.name[0];
+        }
+        fieldErrors.form = res.error || "Gagal membuat akun.";
+        setErrors(fieldErrors);
       }
-    }, 450);
+    } catch {
+      setErrors({ form: "Terjadi kesalahan saat mendaftar. Silakan coba lagi." });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -116,12 +130,13 @@ function RegisterForm() {
               id="nama"
               type="text"
               value={nama}
+              disabled={submitting}
               onChange={(e) => {
                 setNama(e.target.value);
                 if (errors.nama) setErrors((prev) => ({ ...prev, nama: "" }));
               }}
               placeholder="Masukkan nama lengkap"
-              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all ${
+              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed ${
                 errors.nama
                   ? "border-rose-400 focus:ring-rose-200"
                   : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
@@ -129,34 +144,6 @@ function RegisterForm() {
             />
             {errors.nama && (
               <p className="text-rose-600 text-xs mt-1">{errors.nama}</p>
-            )}
-          </div>
-
-          <div>
-            <label
-              htmlFor="whatsapp"
-              className="block text-xs sm:text-sm font-semibold text-foreground mb-1"
-            >
-              Nomor WhatsApp <span className="text-rose-500">*</span>
-            </label>
-            <input
-              id="whatsapp"
-              type="tel"
-              value={whatsapp}
-              onChange={(e) => {
-                setWhatsapp(e.target.value);
-                if (errors.whatsapp)
-                  setErrors((prev) => ({ ...prev, whatsapp: "" }));
-              }}
-              placeholder="08xxxxxxxxxx"
-              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all ${
-                errors.whatsapp
-                  ? "border-rose-400 focus:ring-rose-200"
-                  : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
-              }`}
-            />
-            {errors.whatsapp && (
-              <p className="text-rose-600 text-xs mt-1">{errors.whatsapp}</p>
             )}
           </div>
 
@@ -171,12 +158,13 @@ function RegisterForm() {
               id="email"
               type="email"
               value={email}
+              disabled={submitting}
               onChange={(e) => {
                 setEmail(e.target.value);
                 if (errors.email) setErrors((prev) => ({ ...prev, email: "" }));
               }}
               placeholder="nama@email.com"
-              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all ${
+              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed ${
                 errors.email
                   ? "border-rose-400 focus:ring-rose-200"
                   : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
@@ -185,6 +173,24 @@ function RegisterForm() {
             {errors.email && (
               <p className="text-rose-600 text-xs mt-1">{errors.email}</p>
             )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="whatsapp"
+              className="block text-xs sm:text-sm font-semibold text-foreground mb-1"
+            >
+              Nomor WhatsApp <span className="text-muted-foreground text-[11px] font-normal">(opsional)</span>
+            </label>
+            <input
+              id="whatsapp"
+              type="tel"
+              value={whatsapp}
+              disabled={submitting}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="08xxxxxxxxxx"
+              className="w-full px-4 py-2.5 rounded-xl bg-white border border-border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink/20 focus:border-brand-pink transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+            />
           </div>
 
           <div>
@@ -199,13 +205,14 @@ function RegisterForm() {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
+                disabled={submitting}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (errors.password)
                     setErrors((prev) => ({ ...prev, password: "" }));
                 }}
-                placeholder="Minimal 6 karakter"
-                className={`w-full px-4 py-2.5 pr-10 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all ${
+                placeholder="Minimal 8 karakter"
+                className={`w-full px-4 py-2.5 pr-10 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed ${
                   errors.password
                     ? "border-rose-400 focus:ring-rose-200"
                     : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
@@ -242,13 +249,14 @@ function RegisterForm() {
               id="confirmPassword"
               type={showPassword ? "text" : "password"}
               value={confirmPassword}
+              disabled={submitting}
               onChange={(e) => {
                 setConfirmPassword(e.target.value);
                 if (errors.confirmPassword)
                   setErrors((prev) => ({ ...prev, confirmPassword: "" }));
               }}
               placeholder="Ulangi kata sandi"
-              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all ${
+              className={`w-full px-4 py-2.5 rounded-xl bg-white border text-foreground placeholder:text-muted-foreground/60 text-sm focus:outline-none focus:ring-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed ${
                 errors.confirmPassword
                   ? "border-rose-400 focus:ring-rose-200"
                   : "border-border focus:ring-brand-pink/20 focus:border-brand-pink"
@@ -263,10 +271,10 @@ function RegisterForm() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={submitting}
             className="w-full h-11 sm:h-12 mt-4 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark active:scale-[0.99] transition-all shadow-none flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {loading ? (
+            {submitting ? (
               <span>Mendaftarkan...</span>
             ) : (
               <>
@@ -282,8 +290,8 @@ function RegisterForm() {
             Sudah punya akun?{" "}
             <Link
               href={
-                redirectTarget !== "/akun"
-                  ? `/login?redirect=${encodeURIComponent(redirectTarget)}`
+                redirectParam
+                  ? `/login?redirect=${encodeURIComponent(redirectParam)}`
                   : "/login"
               }
               className="font-semibold text-brand-pink hover:text-brand-pink-dark transition-colors"

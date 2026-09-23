@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
-import { useAuth, CustomerAddress } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
+import type { CheckoutShippingMethod, CheckoutState, PreparedCheckoutPayload } from "@/lib/api/types";
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,7 +28,7 @@ interface CheckoutFormData {
   provinsi: string;
   kodePos: string;
   catatan: string;
-  metodePengiriman: "J&T" | "JNE" | "";
+  metodePengiriman: CheckoutShippingMethod | "";
 }
 
 type FormErrors = Partial<Record<keyof CheckoutFormData, string>>;
@@ -41,18 +42,21 @@ export default function CheckoutContent() {
     addresses,
     defaultAddress,
     addAddress,
+    isAddressesLoading,
+    addressError,
     isHydrated: isAuthHydrated,
   } = useAuth();
 
   // Declare isConfirmed early so it can be referenced by the guard useEffect below
   const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
+  const [reviewPayload, setReviewPayload] = useState<PreparedCheckoutPayload | null>(null);
 
-  // Checkout page guard: If not logged in and cart has items, redirect to login with redirect parameter
+  // Checkout page guard: If not logged in, redirect to login with redirect parameter
   useEffect(() => {
-    if (isHydrated && isAuthHydrated && !isLoggedIn && items.length > 0 && !isConfirmed) {
+    if (isHydrated && isAuthHydrated && !isLoggedIn && !isConfirmed) {
       router.replace("/login?redirect=/checkout");
     }
-  }, [isHydrated, isAuthHydrated, isLoggedIn, items.length, isConfirmed, router]);
+  }, [isHydrated, isAuthHydrated, isLoggedIn, isConfirmed, router]);
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     nama: "",
@@ -63,11 +67,10 @@ export default function CheckoutContent() {
     provinsi: "",
     kodePos: "",
     catatan: "",
-    metodePengiriman: "J&T",
+    metodePengiriman: "",
   });
 
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  const [saveAddressToAccount, setSaveAddressToAccount] = useState<boolean>(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState<boolean>(false);
   const [newAddrForm, setNewAddrForm] = useState({
     label: "Rumah",
@@ -83,14 +86,18 @@ export default function CheckoutContent() {
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSavingNewAddress, setIsSavingNewAddress] = useState(false);
+  const [newAddressError, setNewAddressError] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Initialize form with saved address if customer is logged in
   useEffect(() => {
     if (!isAuthHydrated) return;
 
     if (isLoggedIn && addresses.length > 0) {
-      const initial = defaultAddress || addresses[0];
-      setSelectedAddressId(initial.id);
+      const selected = addresses.find((address) => address.id === selectedAddressId);
+      const initial = selected || defaultAddress || addresses[0];
+      if (!selected) setSelectedAddressId(initial.id);
       setFormData((prev) => ({
         ...prev,
         nama: initial.nama,
@@ -109,25 +116,11 @@ export default function CheckoutContent() {
         whatsapp: prev.whatsapp || customer.whatsapp,
       }));
     }
-  }, [isLoggedIn, isAuthHydrated, addresses, defaultAddress, customer]);
+  }, [isLoggedIn, isAuthHydrated, addresses, defaultAddress, customer, selectedAddressId]);
 
   // Sync formData when selecting an address
   const handleSelectSavedAddress = (addrId: string) => {
     setSelectedAddressId(addrId);
-    if (addrId === "manual") {
-      setFormData((prev) => ({
-        ...prev,
-        nama: customer?.nama || "",
-        whatsapp: customer?.whatsapp || "",
-        alamat: "",
-        kecamatan: "",
-        kota: "",
-        provinsi: "",
-        kodePos: "",
-      }));
-      return;
-    }
-
     const found = addresses.find((a) => a.id === addrId);
     if (found) {
       setFormData((prev) => ({
@@ -164,7 +157,7 @@ export default function CheckoutContent() {
     }
   };
 
-  const handleShippingChange = (method: "J&T" | "JNE") => {
+  const handleShippingChange = (method: CheckoutShippingMethod) => {
     setFormData((prev) => ({ ...prev, metodePengiriman: method }));
     if (errors.metodePengiriman) {
       setErrors((prev) => ({ ...prev, metodePengiriman: undefined }));
@@ -173,6 +166,13 @@ export default function CheckoutContent() {
 
   const validateForm = (): { isValid: boolean; firstKey?: string } => {
     const newErrors: FormErrors = {};
+    const selectedAddress = addresses.find((address) => address.id === selectedAddressId);
+
+    if (!selectedAddress) {
+      setCheckoutError("Pilih alamat pengiriman terlebih dahulu.");
+    } else {
+      setCheckoutError(null);
+    }
 
     if (!formData.nama.trim()) {
       newErrors.nama = "Nama lengkap wajib diisi.";
@@ -210,10 +210,40 @@ export default function CheckoutContent() {
 
     setErrors(newErrors);
     const keys = Object.keys(newErrors);
-    return { isValid: keys.length === 0, firstKey: keys[0] };
+    return { isValid: keys.length === 0 && !!selectedAddress, firstKey: keys[0] };
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const shippingLabel = (method: CheckoutShippingMethod | "") =>
+    method === "jnt" ? "J&T" : method === "jne" ? "JNE" : "Belum dipilih";
+
+  const checkoutState = useMemo<CheckoutState>(() => {
+    const addressId = Number(selectedAddressId);
+    return {
+      addressId: Number.isInteger(addressId) ? addressId : null,
+      shippingMethod: formData.metodePengiriman || null,
+      notes: formData.catatan,
+    };
+  }, [selectedAddressId, formData.metodePengiriman, formData.catatan]);
+
+  const preparedPayload = useMemo<PreparedCheckoutPayload | null>(() => {
+    if (!checkoutState.addressId || !checkoutState.shippingMethod) return null;
+
+    return {
+      address_id: checkoutState.addressId,
+      shipping_method: checkoutState.shippingMethod,
+      notes: checkoutState.notes.trim() || null,
+      items: items.map((item) => {
+        const productId = Number(item.product.id);
+        return {
+          product_id: Number.isInteger(productId) ? productId : null,
+          variant_id: item.selectedVariantId ?? null,
+          quantity: item.quantity,
+        };
+      }),
+    };
+  }, [checkoutState, items]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const { isValid, firstKey } = validateForm();
@@ -228,40 +258,27 @@ export default function CheckoutContent() {
       return;
     }
 
-    // If logged in and requested to save manual address to account
-    if (
-      isLoggedIn &&
-      saveAddressToAccount &&
-      (selectedAddressId === "manual" || addresses.length === 0)
-    ) {
-      addAddress({
-        label: "Rumah",
-        nama: formData.nama,
-        whatsapp: formData.whatsapp,
-        alamat: formData.alamat,
-        kecamatan: formData.kecamatan,
-        kotaKabupaten: formData.kota,
-        provinsi: formData.provinsi,
-        kodePos: formData.kodePos,
-        isDefault: addresses.length === 0,
-      });
-    }
-
     setIsSubmitting(true);
-
-    setTimeout(() => {
+    if (!preparedPayload) {
       setIsSubmitting(false);
-      setIsConfirmed(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 550);
+      setCheckoutError("Data checkout belum lengkap. Silakan periksa kembali.");
+      return;
+    }
+    setReviewPayload(preparedPayload);
+    setIsSubmitting(false);
+    setIsConfirmed(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // Handle adding a new address in modal
-  const handleAddNewAddressModal = (e: React.FormEvent) => {
+  const handleAddNewAddressModal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAddrForm.nama.trim() || !newAddrForm.alamat.trim()) return;
 
-    const created = addAddress({
+    setIsSavingNewAddress(true);
+    setNewAddressError(null);
+    try {
+    const created = await addAddress({
       label: newAddrForm.label || "Rumah",
       nama: newAddrForm.nama,
       whatsapp: newAddrForm.whatsapp,
@@ -287,6 +304,11 @@ export default function CheckoutContent() {
     }));
 
     setIsAddressModalOpen(false);
+    } catch (error: any) {
+      setNewAddressError(error?.response?.data?.message || "Gagal menyimpan alamat. Silakan coba lagi.");
+    } finally {
+      setIsSavingNewAddress(false);
+    }
   };
 
   // 1. Loading state
@@ -377,16 +399,8 @@ export default function CheckoutContent() {
               Terima kasih, {formData.nama}.
             </p>
 
-            <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto mb-2">
-              Informasi pesananmu sudah kami terima.
-            </p>
-
-            <p className="font-sans text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto mb-8">
-              Tim KREZOEMA akan mengonfirmasi detail pesanan dan ongkos kirim melalui WhatsApp{" "}
-              <strong className="text-foreground font-semibold">
-                ({formData.whatsapp})
-              </strong>
-              .
+            <p className="font-sans text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto mb-8">
+              Periksa kembali ringkasan di bawah. Pesanan belum dibuat dan belum dikirim ke KREZOEMA.
             </p>
 
             {/* Order Summary Snapshot */}
@@ -413,7 +427,7 @@ export default function CheckoutContent() {
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px]">Metode Ekspedisi</span>
-                  <span className="font-medium text-foreground">{formData.metodePengiriman}</span>
+                  <span className="font-medium text-foreground">{shippingLabel(reviewPayload?.shipping_method || "")}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[11px]">Subtotal Produk</span>
@@ -428,10 +442,23 @@ export default function CheckoutContent() {
                   </div>
                 )}
               </div>
+
+              <div className="border-t border-border/60 pt-3">
+                <span className="text-muted-foreground block text-[11px] mb-1">Item</span>
+                {items.map((item) => (
+                  <div key={item.id} className="flex justify-between gap-3 text-xs py-1">
+                    <span className="text-foreground">{item.product.name} × {item.quantity}</span>
+                    <span className="font-medium text-foreground">{formatRupiah(item.product.price * item.quantity)}</span>
+                  </div>
+                ))}
+                <div className="mt-2 flex justify-between border-t border-border/40 pt-2 text-sm font-bold text-foreground">
+                  <span>Total Produk</span><span>{formatRupiah(cartTotal())}</span>
+                </div>
+              </div>
             </div>
 
             <div className="p-3 bg-brand-pink-soft/40 rounded-xl max-w-xl mx-auto mb-8 text-[12px] text-brand-pink-dark">
-              Detail pesanan telah tersimpan. Silakan tunggu konfirmasi estimasi ongkir dari WhatsApp admin KREZOEMA.
+              Data di atas hanya review checkout. Pembuatan pesanan akan tersedia pada tahap berikutnya.
             </div>
 
             {/* Navigation Actions */}
@@ -588,48 +615,40 @@ export default function CheckoutContent() {
                       );
                     })}
 
-                    {/* Option: Input manual or different address */}
-                    <label
-                      onClick={() => handleSelectSavedAddress("manual")}
-                      className={`cursor-pointer rounded-2xl border p-4 transition-all flex items-start gap-3.5 ${
-                        selectedAddressId === "manual"
-                          ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
-                          : "border-border bg-white hover:border-brand-pink/30 hover:bg-brand-warm/50"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="savedAddressRadio"
-                        value="manual"
-                        checked={selectedAddressId === "manual"}
-                        onChange={() => handleSelectSavedAddress("manual")}
-                        className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
-                      />
-                      <div>
-                        <span className="font-bold text-xs sm:text-sm text-foreground block">
-                          Gunakan Alamat Lain / Input Manual
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Kirim ke alamat lain untuk pesanan ini
-                        </span>
-                      </div>
-                    </label>
                   </div>
                 </div>
               )}
 
-              {/* SECTION 2: FORM DETAIL ALAMAT (Visible if guest, if 'manual' selected, or for editing) */}
+              {isLoggedIn && !isAddressesLoading && addresses.length === 0 && (
+                <div className="rounded-3xl bg-white border border-border/80 p-6 sm:p-8">
+                  <h2 className="font-sans text-lg font-bold text-foreground">Belum ada alamat pengiriman.</h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1 mb-4">Tambahkan alamat agar dapat dipilih untuk checkout berikutnya.</p>
+                  <button type="button" onClick={() => setIsAddressModalOpen(true)} className="inline-flex items-center gap-2 rounded-full bg-brand-pink px-4 py-2 text-xs font-semibold text-white hover:bg-brand-pink-dark">
+                    <Plus className="w-4 h-4" /> Tambah Alamat
+                  </button>
+                </div>
+              )}
+
+              {(isAddressesLoading || addressError) && (
+                <p className={`text-xs ${addressError ? "text-rose-600" : "text-muted-foreground"}`}>
+                  {addressError || "Memuat alamat tersimpan..."}
+                </p>
+              )}
+
+              {/* SECTION 2: Selected address details */}
               <div className="rounded-3xl bg-white border border-border/80 p-6 sm:p-8 shadow-sm">
                 <div className="flex items-center justify-between mb-1">
-                  <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground">
-                    {isLoggedIn && addresses.length > 0 && selectedAddressId !== "manual"
-                      ? "Detail Alamat Terpilih"
-                      : "Informasi Pengiriman"}
-                  </h2>
+                  <h2 className="font-sans text-lg sm:text-xl font-bold text-foreground">Detail Alamat Terpilih</h2>
                 </div>
                 <p className="text-xs sm:text-sm text-muted-foreground mb-6">
-                  Pastikan alamat dan nomor kontak aktif untuk kemudahan kurir.
+                  Pilih atau tambahkan alamat dari buku alamatmu. Detail di bawah mengikuti alamat yang dipilih.
                 </p>
+
+                {checkoutError && (
+                  <p className="mb-4 flex items-center gap-1 text-xs font-medium text-rose-600" role="alert">
+                    <AlertCircle className="h-3.5 w-3.5" /> {checkoutError}
+                  </p>
+                )}
 
                 <div className="space-y-4 sm:space-y-5">
                   {/* Nama Lengkap */}
@@ -645,7 +664,7 @@ export default function CheckoutContent() {
                       id="nama"
                       name="nama"
                       value={formData.nama}
-                      onChange={handleInputChange}
+                      readOnly
                       placeholder="Masukkan nama lengkap"
                       aria-required="true"
                       aria-invalid={!!errors.nama}
@@ -677,7 +696,7 @@ export default function CheckoutContent() {
                       id="whatsapp"
                       name="whatsapp"
                       value={formData.whatsapp}
-                      onChange={handleInputChange}
+                      readOnly
                       placeholder="08xxxxxxxxxx"
                       aria-required="true"
                       aria-invalid={!!errors.whatsapp}
@@ -709,7 +728,7 @@ export default function CheckoutContent() {
                       name="alamat"
                       rows={3}
                       value={formData.alamat}
-                      onChange={handleInputChange}
+                      readOnly
                       placeholder="Nama jalan, nomor rumah, RT/RW, atau detail alamat lainnya"
                       aria-required="true"
                       aria-invalid={!!errors.alamat}
@@ -741,8 +760,8 @@ export default function CheckoutContent() {
                         type="text"
                         id="kecamatan"
                         name="kecamatan"
-                        value={formData.kecamatan}
-                        onChange={handleInputChange}
+                      value={formData.kecamatan}
+                      readOnly
                         placeholder="Masukkan kecamatan"
                         aria-required="true"
                         aria-invalid={!!errors.kecamatan}
@@ -772,8 +791,8 @@ export default function CheckoutContent() {
                         type="text"
                         id="kota"
                         name="kota"
-                        value={formData.kota}
-                        onChange={handleInputChange}
+                      value={formData.kota}
+                      readOnly
                         placeholder="Masukkan kota atau kabupaten"
                         aria-required="true"
                         aria-invalid={!!errors.kota}
@@ -806,8 +825,8 @@ export default function CheckoutContent() {
                         type="text"
                         id="provinsi"
                         name="provinsi"
-                        value={formData.provinsi}
-                        onChange={handleInputChange}
+                      value={formData.provinsi}
+                      readOnly
                         placeholder="Masukkan provinsi"
                         aria-required="true"
                         aria-invalid={!!errors.provinsi}
@@ -838,8 +857,8 @@ export default function CheckoutContent() {
                         id="kodePos"
                         name="kodePos"
                         inputMode="numeric"
-                        value={formData.kodePos}
-                        onChange={handleInputChange}
+                      value={formData.kodePos}
+                      readOnly
                         placeholder="12345"
                         aria-required="true"
                         aria-invalid={!!errors.kodePos}
@@ -858,21 +877,6 @@ export default function CheckoutContent() {
                       )}
                     </div>
                   </div>
-
-                  {/* Save to customer account option if logged in and typing manual */}
-                  {isLoggedIn && (selectedAddressId === "manual" || addresses.length === 0) && (
-                    <div className="pt-2">
-                      <label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-foreground">
-                        <input
-                          type="checkbox"
-                          checked={saveAddressToAccount}
-                          onChange={(e) => setSaveAddressToAccount(e.target.checked)}
-                          className="rounded border-border text-brand-pink focus:ring-brand-pink w-4 h-4"
-                        />
-                        <span>Simpan alamat ini ke buku alamat saya untuk checkout berikutnya</span>
-                      </label>
-                    </div>
-                  )}
 
                   {/* Catatan Pesanan */}
                   <div>
@@ -919,9 +923,9 @@ export default function CheckoutContent() {
                 >
                   {/* J&T Card */}
                   <label
-                    onClick={() => handleShippingChange("J&T")}
+                    onClick={() => handleShippingChange("jnt")}
                     className={`cursor-pointer rounded-2xl border p-4 transition-all flex items-start gap-3.5 ${
-                      formData.metodePengiriman === "J&T"
+                      formData.metodePengiriman === "jnt"
                         ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
                         : "border-border bg-white hover:border-brand-pink/40 hover:bg-brand-warm/40"
                     }`}
@@ -929,9 +933,9 @@ export default function CheckoutContent() {
                     <input
                       type="radio"
                       name="metodePengiriman"
-                      value="J&T"
-                      checked={formData.metodePengiriman === "J&T"}
-                      onChange={() => handleShippingChange("J&T")}
+                      value="jnt"
+                      checked={formData.metodePengiriman === "jnt"}
+                      onChange={() => handleShippingChange("jnt")}
                       className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
                     />
                     <div>
@@ -946,9 +950,9 @@ export default function CheckoutContent() {
 
                   {/* JNE Card */}
                   <label
-                    onClick={() => handleShippingChange("JNE")}
+                    onClick={() => handleShippingChange("jne")}
                     className={`cursor-pointer rounded-2xl border p-4 transition-all flex items-start gap-3.5 ${
-                      formData.metodePengiriman === "JNE"
+                      formData.metodePengiriman === "jne"
                         ? "border-brand-pink bg-brand-pink-soft/25 shadow-xs ring-1 ring-brand-pink"
                         : "border-border bg-white hover:border-brand-pink/40 hover:bg-brand-warm/40"
                     }`}
@@ -956,9 +960,9 @@ export default function CheckoutContent() {
                     <input
                       type="radio"
                       name="metodePengiriman"
-                      value="JNE"
-                      checked={formData.metodePengiriman === "JNE"}
-                      onChange={() => handleShippingChange("JNE")}
+                      value="jne"
+                      checked={formData.metodePengiriman === "jne"}
+                      onChange={() => handleShippingChange("jne")}
                       className="mt-1 w-4 h-4 text-brand-pink focus:ring-brand-pink border-border"
                     />
                     <div>
@@ -1047,6 +1051,9 @@ export default function CheckoutContent() {
                                 .join(" • ")}
                             </p>
                           )}
+                          <p className="text-[11px] text-muted-foreground">
+                            Harga satuan: {formatRupiah(item.product.price)}
+                          </p>
                           <div className="flex items-center justify-between mt-1 text-xs">
                             <span className="text-muted-foreground">
                               × {item.quantity}
@@ -1073,11 +1080,11 @@ export default function CheckoutContent() {
                     <div>
                       <span>Pengiriman</span>
                       <span className="block text-[10px] text-muted-foreground/80">
-                        {formData.metodePengiriman ? `Kurir: ${formData.metodePengiriman}` : "Belum dipilih"}
+                        {`Kurir: ${shippingLabel(formData.metodePengiriman)}`}
                       </span>
                     </div>
                     <span className="font-medium text-foreground text-right text-xs">
-                      Dikonfirmasi via WA
+                      Rp0 · Dikonfirmasi kemudian
                     </span>
                   </div>
                 </div>
@@ -1086,10 +1093,10 @@ export default function CheckoutContent() {
                 <div className="py-4 flex items-baseline justify-between">
                   <div>
                     <span className="text-xs uppercase tracking-wider text-brand-pink block font-semibold">
-                      Total Produk
+                      Total Sementara
                     </span>
                     <span className="text-[11px] text-muted-foreground font-normal">
-                      Belum termasuk ongkir
+                      Ongkir belum termasuk
                     </span>
                   </div>
                   <span className="font-sans text-xl font-bold text-foreground">
@@ -1097,7 +1104,7 @@ export default function CheckoutContent() {
                   </span>
                 </div>
 
-                {/* Primary Action Button: Konfirmasi Pesanan */}
+                {/* Primary Action Button: review only, no order request */}
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -1107,7 +1114,7 @@ export default function CheckoutContent() {
                     <span>Memproses...</span>
                   ) : (
                     <>
-                      <span>Konfirmasi Pesanan</span>
+                    <span>Tinjau Pesanan</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -1115,7 +1122,7 @@ export default function CheckoutContent() {
 
                 <div className="mt-4 text-center">
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Informasi pesanan akan dicek oleh admin KREZOEMA untuk verifikasi ketersediaan material dan ongkir.
+                    Data ini belum membuat pesanan. Ongkir akan dikonfirmasi setelah Order API tersedia.
                   </p>
                 </div>
               </div>
@@ -1142,6 +1149,7 @@ export default function CheckoutContent() {
             </div>
 
             <form onSubmit={handleAddNewAddressModal} className="space-y-3">
+              {newAddressError && <p className="text-xs text-rose-600">{newAddressError}</p>}
               <div>
                 <label className="block text-xs font-semibold text-foreground mb-1">
                   Label
@@ -1295,15 +1303,17 @@ export default function CheckoutContent() {
                 <button
                   type="button"
                   onClick={() => setIsAddressModalOpen(false)}
+                  disabled={isSavingNewAddress}
                   className="px-4 py-1.5 rounded-full border border-border text-xs font-medium text-foreground hover:bg-secondary"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-1.5 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark transition-colors"
+                  disabled={isSavingNewAddress}
+                  className="px-5 py-1.5 rounded-full bg-brand-pink text-white text-xs font-semibold hover:bg-brand-pink-dark transition-colors disabled:opacity-60"
                 >
-                  Gunakan Alamat Ini
+                  {isSavingNewAddress ? "Menyimpan..." : "Gunakan Alamat Ini"}
                 </button>
               </div>
             </form>
